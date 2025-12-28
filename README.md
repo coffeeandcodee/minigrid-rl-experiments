@@ -1,6 +1,15 @@
 # minigrid-rl-experiments
 
-Reinforcement learning experiments using MiniGrid environments, developed as part of the Statistical Planning and Reinforcement Learning module
+Reinforcement learning experiments using MiniGrid environments, developed as part of the Statistical Planning and Reinforcement Learning module.
+
+As of now, I've just added some super simple code that renderes the 5x5 grid. Just run the code below in the terminal if you haven't installed any of the dependencies already and click run.
+
+
+## Setup
+```bash
+pip install gymnasium minigrid numpy torch
+```
+
 
 ## Project Overview
 
@@ -20,18 +29,7 @@ Custom experiments using MiniGrid environments to explore RL challenges such as:
 - Sparse rewards
 - Exploration strategies
 
-## Setup
-```bash
-pip install gymnasium minigrid numpy torch
-```
 
-## Team
-
-- [Name 1]
-- [Name 2]
-- [Name 3]
-
-## Resources
 
 - [MiniGrid Documentation](https://minigrid.farama.org/)
 - [Stable Baselines3](https://stable-baselines3.readthedocs.io/)
