@@ -1,18 +1,12 @@
 # MiniGrid RL Experiments
 
-Reinforcement learning experiments using MiniGrid environments, developed as part of the **Statistical Planning and Reinforcement Learning** module (Assignment Part 2: Beyond the Frozen Lake).
+Assignment Part 2: Beyond the Frozen Lake
 
----
+Here's some ideas as to what algorithms and experiments we can look into testing in the days to come. 
 
-## Table of Contents
+A lot of the algorithms are available in Stables Baselines 3 (the library mentioned in the assignment.pdf).
 
-1. [Setup](#setup)
-2. [Project Goal](#project-goal)
-3. [Recommended Algorithms](#recommended-algorithms)
-4. [Recommended Environments](#recommended-environments)
-5. [Experiment Design](#experiment-design)
-6. [Our Proposed Study](#our-proposed-study)
-7. [Resources](#resources)
+
 
 ---
 
@@ -24,161 +18,79 @@ pip install gymnasium minigrid stable-baselines3 sb3-contrib numpy torch matplot
 
 ---
 
-## Project Goal
+## Algorithms We Can Use
 
-Based on the assignment requirements, we need to:
+All available in **Stable Baselines 3** (no custom implementation needed):
 
-- Use **existing libraries** (Minigrid, Stable Baselines 3) — don't reinvent the wheel
-- Address **recognized RL challenges** from Arulkumaran et al., 2017 (Section VI)
-- Design **creative/challenging experiments** (worth 35/50 points!)
-- Create a **reproducible experimental protocol** (worth 10/50 points)
-- Conduct **rigorous analysis** with tables and plots (worth 5/50 points)
+| Algorithm | What it is |
+|-----------|------------|
+| **DQN** | Value-based, discrete actions |
+| **A2C** | Basic actor-critic |
+| **PPO** | Improved actor-critic (more stable than A2C) |
+| **SAC** | Off-policy actor-critic |
 
----
-
-## Recommended Algorithms
-
-We have three possible directions. Each option trades off between safety/documentation and creativity/risk.
-
-### Option A: Sample Efficiency Comparison ✅ (Safest, well-documented)
-
-| Algorithm | Library | Why |
-|-----------|---------|-----|
-| **PPO** (Proximal Policy Optimization) | Stable Baselines 3 | Strong baseline, very stable |
-| **SAC** (Soft Actor-Critic) | Stable Baselines 3 | Sample-efficient for continuous action spaces |
-| **DQN** (with variants: Double, Dueling, PER) | Stable Baselines 3 | Compare improvements over vanilla DQN |
-
-### Option B: Exploration Challenge 🔍 (More creative)
-
-| Algorithm | Library | Why |
-|-----------|---------|-----|
-| **PPO + ICM** (Intrinsic Curiosity Module) | SB3-Contrib | Addresses sparse rewards via curiosity |
-| **RND** (Random Network Distillation) | Custom / TorchRL | State-of-the-art exploration bonus |
-| **PPO** (baseline) | Stable Baselines 3 | Control comparison |
-
-### Option C: Hierarchical RL 🏗️ (Challenging, high reward potential)
-
-| Algorithm | Library | Why |
-|-----------|---------|-----|
-| **HIRO** or **Option-Critic** | TorchRL / Custom | Multi-level temporal abstraction |
-| **PPO** | Stable Baselines 3 | Flat baseline for comparison |
+**Exploration bonus** (from SB3-Contrib):
+- **PPO + ICM** — adds curiosity-driven exploration
 
 ---
 
-## Recommended Environments
+## Challenges We Can Address
 
-**MiniGrid** is explicitly mentioned in the assignment as a good choice. It's perfect because:
+From the Arulkumaran 2017 paper (referenced in assignment):
 
-- ✅ Highly customizable
-- ✅ Partial observability (a recognized RL challenge!)
-- ✅ Sparse rewards (a recognized RL challenge!)
-- ✅ Easy to create a curriculum of increasing difficulty
-- ✅ Well-maintained by the Farama Foundation
-
-### Specific Environments to Consider
-
-| Environment | Challenge Type | Difficulty |
-|-------------|----------------|------------|
-| `MiniGrid-Empty-8x8-v0` | Basic navigation | Easy (sanity check) |
-| `MiniGrid-DoorKey-5x5-v0` | Object manipulation, sparse reward | Medium |
-| `MiniGrid-DoorKey-16x16-v0` | Object manipulation, sparse reward | Hard |
-| `MiniGrid-KeyCorridorS3R3-v0` | Multi-step planning, sparse reward | Hard |
-| `MiniGrid-MultiRoom-N2-S4-v0` | Exploration, sparse reward | Medium |
-| `MiniGrid-MultiRoom-N6-v0` | Exploration, very sparse reward | Very Hard |
-| `MiniGrid-MemoryS17Random-v0` | Memory requirement | Hard |
-
-### Environment Notes
-
-- **DoorKey**: Agent must pick up a key to unlock a door and reach the goal
-- **MultiRoom**: Agent navigates through multiple connected rooms to find the goal
-- **KeyCorridor**: Agent must navigate corridors and use keys strategically
+1. **Sample Efficiency** — How quickly does the agent learn?
+2. **Sparse Rewards** — Can the agent learn when rewards are rare?
+3. **Exploration** — Does curiosity help discover solutions faster?
+4. **Generalization** — Can agents trained on small envs work on larger ones?
 
 ---
 
-## Experiment Design
+## Environments We Can Use
 
-### Experiment 1: Sample Efficiency Study
+**MiniGrid** — recommended in the assignment, easy to install, many variants.
 
-**Question**: How many environment steps do different algorithms need to solve tasks of increasing difficulty?
-
-| Component | Details |
-|-----------|---------|
-| **Independent Variable** | Algorithm (PPO vs SAC vs DQN variants) |
-| **Dependent Variable** | Cumulative reward over training steps |
-| **Control** | Same environment, same random seeds |
-| **Replication** | 5-10 runs per condition |
-
-### Experiment 2: Sparse Reward Robustness
-
-**Question**: Do exploration bonuses (intrinsic curiosity) help in sparse-reward environments?
-
-| Component | Details |
-|-----------|---------|
-| **Independent Variable** | Exploration method (None vs ICM vs RND) |
-| **Dependent Variable** | Success rate, time to first success |
-| **Environment** | MiniGrid-MultiRoom (increasing number of rooms) |
-| **Replication** | 5-10 runs per condition |
-
-### Experiment 3: Generalization / Transfer
-
-**Question**: Can agents trained on small environments generalize to larger versions?
-
-| Component | Details |
-|-----------|---------|
-| **Training Environment** | MiniGrid-DoorKey-5x5 |
-| **Test Environments** | MiniGrid-DoorKey-8x8, 16x16 |
-| **Metrics** | Zero-shot performance, fine-tuning speed |
+| Environment | What's hard about it |
+|-------------|---------------------|
+| `MiniGrid-Empty-8x8-v0` | Nothing (sanity check) |
+| `MiniGrid-DoorKey-5x5-v0` | Must find key, unlock door, reach goal |
+| `MiniGrid-DoorKey-16x16-v0` | Same but larger (harder exploration) |
+| `MiniGrid-MultiRoom-N2-S4-v0` | Navigate through 2 connected rooms |
+| `MiniGrid-MultiRoom-N6-v0` | Navigate through 6 rooms (very sparse reward) |
 
 ---
 
-## Our Proposed Study
+## Experiments We Can Run
 
-### Title
-**"Sample Efficiency and Exploration in Sparse-Reward Grid Worlds"**
+### Experiment 1: Algorithm Comparison
+> Which algorithm learns fastest on DoorKey?
 
-### Research Question
-> Does intrinsic curiosity improve sample efficiency in sparse-reward navigation tasks?
+Compare A2C vs PPO vs DQN on the same environment. Plot learning curves.
 
-### Design Summary
+### Experiment 2: Exploration Bonus
+> Does curiosity help with sparse rewards?
 
-| Component | Choice |
-|-----------|--------|
-| **Environments** | MiniGrid DoorKey and MultiRoom series (varying sizes) |
-| **Algorithms** | PPO, PPO+ICM, DQN+PER |
-| **Libraries** | Stable Baselines 3, SB3-Contrib, MiniGrid |
-| **Metrics** | Episode return vs. training steps, success rate, wall-clock time |
-| **Protocol** | 5 seeds per condition, learning curves with 95% confidence intervals |
+Compare PPO vs PPO+ICM on MultiRoom environments. Measure success rate.
 
-### Why This Works
+### Experiment 3: Generalization
+> Can a small-env agent work on bigger envs?
 
-- ✅ **Creative enough** to score well on the 35-point creativity component
-- ✅ **Uses established libraries** (SB3, MiniGrid) — no time wasted on implementation bugs
-- ✅ **Clear hypothesis** that can be tested and analyzed rigorously
-- ✅ **Reproducible** with fixed seeds and documented hyperparameters
-- ✅ **Addresses a recognized RL challenge** (exploration in sparse rewards)
+Train on DoorKey-5x5, test on DoorKey-8x8 and 16x16.
+
+---
+
+## Metrics to Record
+
+- Episode reward over training steps
+- Success rate (did agent reach goal?)
+- Time to first success
+- Wall-clock training time
+
+Run each experiment with **5 different random seeds** to get error bars.
 
 ---
 
 ## Resources
 
-- [MiniGrid Documentation](https://minigrid.farama.org/)
-- [Stable Baselines 3 Documentation](https://stable-baselines3.readthedocs.io/)
-- [SB3-Contrib (includes ICM, RND)](https://sb3-contrib.readthedocs.io/)
-- [Arulkumaran et al., 2017 — A Brief Survey of Deep RL](https://arxiv.org/abs/1708.05866)
-- [Farama Foundation](https://farama.org/)
-
----
-
-## Team Discussion Points
-
-1. **Which option (A, B, or C) should we pursue?**
-2. **Which specific MiniGrid environments should we use?**
-3. **How should we divide the work?**
-   - Environment setup / wrappers
-   - Training scripts
-   - Evaluation / plotting
-   - Report writing
-
----
-
-*Last updated: January 2026*
+- [MiniGrid Docs](https://minigrid.farama.org/)
+- [Stable Baselines 3](https://stable-baselines3.readthedocs.io/)
+- [SB3-Contrib](https://sb3-contrib.readthedocs.io/)
