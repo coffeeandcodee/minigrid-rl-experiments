@@ -1,5 +1,7 @@
 import numpy as np
+import torch
 import contextlib
+from collections import deque
 
 # Configures numpy print options
 @contextlib.contextmanager
@@ -103,9 +105,11 @@ class FrozenLake(Environment):
         
     def p(self, next_state, state, action):
         # TODO:
+        pass
     
     def r(self, next_state, state, action):
         # TODO:
+        pass
    
     def render(self, policy=None, value=None):
         if policy is None:
@@ -302,7 +306,8 @@ class FrozenLakeImageWrapper:
         self.state_image = {lake.absorbing_state: 
                             np.stack([np.zeros(lake.shape)] + lake_image)}
         for state in range(lake.size):
-            # TODO: 
+            # TODO:
+            pass
 
     def encode_state(self, state):
         return self.state_image[state]
@@ -390,6 +395,7 @@ class ReplayBuffer:
 
     def draw(self, batch_size):
         # TODO:
+        pass
         
         
 def deep_q_network_learning(env, max_episodes, learning_rate, gamma, epsilon, 
