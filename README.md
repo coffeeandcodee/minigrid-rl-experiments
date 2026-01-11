@@ -6,7 +6,7 @@ Here's some ideas as to what algorithms and experiments we can look into testing
 
 A lot of the algorithms are available in Stables Baselines 3 (the library mentioned in the assignment.pdf).
 
-
+**Also, have a look at the "2017 Challenges in Deep RL.pdf", and scroll down to "Current Research and challanges" on page 10. Let's try to address some of these**
 
 ---
 
