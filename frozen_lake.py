@@ -1,0 +1,466 @@
+import numpy as np
+import contextlib
+
+
+# Configures numpy print options
+@contextlib.contextmanager
+def _printoptions(*args, **kwargs):
+    original = np.get_printoptions()
+    np.set_printoptions(*args, **kwargs)
+    try:
+        yield
+    finally:
+        np.set_printoptions(**original)
+
+
+class EnvironmentModel:
+    def __init__(self, n_states, n_actions, seed=None):
+        self.n_states = n_states
+        self.n_actions = n_actions
+
+        self.random_state = np.random.RandomState(seed)
+
+    def p(self, next_state, state, action):
+        raise NotImplementedError()
+
+    def r(self, next_state, state, action):
+        raise NotImplementedError()
+
+    def draw(self, state, action):
+        p = [self.p(ns, state, action) for ns in range(self.n_states)]
+        next_state = self.random_state.choice(self.n_states, p=p)
+        reward = self.r(next_state, state, action)
+
+        return next_state, reward
+
+
+class Environment(EnvironmentModel):
+    def __init__(self, n_states, n_actions, max_steps, pi, seed=None):
+        EnvironmentModel.__init__(self, n_states, n_actions, seed)
+
+        self.max_steps = max_steps
+
+        self.pi = pi
+        if self.pi is None:
+            self.pi = np.full(n_states, 1.0 / n_states)
+
+    def reset(self):
+        self.n_steps = 0
+        self.state = self.random_state.choice(self.n_states, p=self.pi)
+
+        return self.state
+
+    def step(self, action):
+        if action < 0 or action >= self.n_actions:
+            raise Exception("Invalid action.")
+
+        self.n_steps += 1
+        done = self.n_steps >= self.max_steps
+
+        self.state, reward = self.draw(self.state, action)
+
+        return self.state, reward, done
+
+    def render(self, policy=None, value=None):
+        raise NotImplementedError()
+
+
+class FrozenLake(Environment):
+    def __init__(self, lake, slip, max_steps, seed=None):
+        """
+        lake: A matrix that represents the lake. For example:
+        lake =  [['&', '.', '.', '.'],
+                ['.', '#', '.', '#'],
+                ['.', '.', '.', '#'],
+                ['#', '.', '.', '$']]
+        slip: The probability that the agent will slip
+        max_steps: The maximum number of time steps in an episode
+        seed: A seed to control the random number generator (optional)
+        """
+        # start (&), frozen (.), hole (#), goal ($)
+        self.lake = np.array(lake)
+        self.lake_flat = self.lake.reshape(-1)
+        self.height = self.lake.shape[0]
+        self.width = self.lake.shape[1]
+
+        self.slip = slip
+
+        n_states = self.lake.size + 1
+        n_actions = 4
+
+        pi = np.zeros(n_states, dtype=float)
+        pi[np.where(self.lake_flat == "&")[0]] = 1.0
+
+        self.absorbing_state = n_states - 1
+
+        # TODO:
+
+        Environment.__init__(self, n_states, n_actions, max_steps, pi, seed=seed)
+
+    def coord_to_state(self, x, y):
+        return self.lake_flat[x * self.width + y]
+
+    def state_to_coord(self, state):
+        if state == self.absorbing_state:
+            return self.width, self.height
+
+        x = state % self.width
+        y = state // self.width
+        return x, y
+
+    def step(self, action):
+        state, reward, done = Environment.step(self, action)
+
+        done = (state == self.absorbing_state) or done
+
+        return state, reward, done
+
+    def p(self, next_state, state, action):
+        # If going into absorbing state
+        if state != self.absorbing_state:
+            if self.lake_flat[state] == "#":
+                if next_state == self.absorbing_state:
+                    return 1.0
+                else:
+                    return 0.0
+
+            if self.lake_flat[state] == "$":
+                if next_state == self.absorbing_state:
+                    return 1.0
+                else:
+                    return 0.0
+
+        s_x, s_y = self.state_to_coord(state)
+        ns_x, ns_y = self.state_to_coord(next_state)
+        target_x, target_y = s_x, s_y
+
+        # Try moving
+        if action == 0:
+            target_y -= 1
+
+        elif action == 1:
+            target_x -= 1
+
+        elif action == 2:
+            target_y += 1
+
+        elif action == 3:
+            target_x += 1
+
+        adjacent_states = [
+            (s_x + 1, s_y),
+            (s_x - 1, s_y),
+            (s_x, s_y + 1),
+            (s_x, s_y - 1),
+        ]
+
+        valid_adjacent = []
+        invalid_adjacent = []
+
+        for x, y in adjacent_states:
+            if 0 <= x < self.width and 0 <= y < self.height:
+                valid_adjacent.append((x, y))
+            else:
+                invalid_adjacent.append((x, y))
+
+        # Calculate transition probabilities
+        prob = 0.0
+
+        # If landed out of bounds
+        if (target_x, target_y) in invalid_adjacent:
+            if (ns_x, ns_y) == (s_x, s_y):
+                prob += 0.9
+
+        # If landed on valid tile
+        else:
+            if (ns_x, ns_y) == (target_x, target_y):
+                prob += 0.9
+
+        # Calculate slippage probabilities
+        slippage = 0.1 / 4
+
+        for adj_x, adj_y in invalid_adjacent:
+            if (ns_x, ns_y) == (s_x, s_y):
+                prob += slippage
+
+        for adj_x, adj_y in valid_adjacent:
+            if (ns_x, ns_y) == (adj_x, adj_y):
+                prob += slippage
+
+        return prob
+
+    def r(self, next_state, state, action):
+        if next_state == self.absorbing_state and state != self.absorbing_state:
+            if self.lake_flat[state] == "#":
+                return 0.0
+            elif self.lake_flat[state] == "$":
+                return 1.0
+
+        return 0.0
+
+    def render(self, policy=None, value=None):
+        if policy is None:
+            lake = np.array(self.lake_flat)
+
+            if self.state < self.absorbing_state:
+                lake[self.state] = "@"
+
+            print(lake.reshape(self.lake.shape))
+        else:
+            # UTF-8 arrows look nicer, but cannot be used in LaTeX
+            # https://www.w3schools.com/charsets/ref_utf_arrows.asp
+            actions = ["^", "<", "_", ">"]
+
+            print("Lake:")
+            print(self.lake)
+
+            print("Policy:")
+            policy = np.array([actions[a] for a in policy[:-1]])
+            print(policy.reshape(self.lake.shape))
+
+            print("Value:")
+            with _printoptions(precision=3, suppress=True):
+                print(value[:-1].reshape(self.lake.shape))
+
+
+def play(env):
+    actions = ["w", "a", "s", "d"]
+
+    state = env.reset()
+    env.render()
+
+    done = False
+    while not done:
+        c = input("\nMove: ")
+        if c not in actions:
+            raise Exception("Invalid action")
+
+        state, r, done = env.step(actions.index(c))
+
+        env.render()
+        print("Reward: {0}.".format(r))
+
+
+def policy_evaluation(env, policy, gamma, theta, max_iterations):
+    value = np.zeros(env.n_states, dtype=float)
+
+    for i in range(max_iterations):
+        delta = 0
+
+        for s in range(env.n_states):
+            v = value[s]
+            new_v = 0
+            a = policy[s]
+
+            for ns in range(env.n_states):
+                p = env.p(ns, s, a)
+                r = env.r(ns, s, a)
+                new_v += p * (r + gamma * value[ns])
+
+            value[s] = new_v
+            delta = max(delta, abs(v - new_v))
+
+        if delta < theta:
+            break
+
+    return value
+
+
+def policy_improvement(env, value, gamma):
+    policy = np.zeros(env.n_states, dtype=int)
+
+    for s in range(env.n_states):
+        q_values = np.zeros(env.n_actions, dtype=float)
+
+        for a in range(env.n_actions):
+            for ns in range(env.n_states):
+                p = env.p(ns, s, a)
+                r = env.r(ns, s, a)
+                q_values[a] += p * (r + gamma * value[ns])
+
+        best_action = np.argmax(q_values)
+        policy[s] = best_action
+
+    return policy
+
+
+def policy_iteration(env, gamma, theta, max_iterations, policy=None):
+    if policy is None:
+        policy = np.zeros(env.n_states, dtype=int)
+    else:
+        policy = np.array(policy, dtype=int)
+
+    value = np.zeros(env.n_states, dtype=float)
+
+    for i in range(max_iterations):
+        value = policy_evaluation(env, policy, gamma, theta, max_iterations)
+        new_policy = policy_improvement(env, value, gamma)
+
+        if np.array_equal(policy, new_policy):
+            break
+
+        policy = new_policy
+
+    return policy, value
+
+
+def value_iteration(env, gamma, theta, max_iterations, value=None):
+    if value is None:
+        value = np.zeros(env.n_states)
+    else:
+        value = np.array(value, dtype=float)
+
+    for i in range(max_iterations):
+        delta = 0
+
+        for s in range(env.n_states):
+            v = value[s]
+            q_values = np.zeros(env.n_actions, dtype=float)
+
+            for a in range(env.n_actions):
+                for ns in range(env.n_states):
+                    p = env.p(ns, s, a)
+                    r = env.r(ns, s, a)
+                    q_values[a] += p * (r + gamma * value[ns])
+
+            value[s] = np.max(q_values)
+            delta = max(delta, abs(v - value[s]))
+
+        if delta < theta:
+            break
+
+    policy = policy_improvement(env, value, gamma)
+    return policy, value
+
+
+def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
+    random_state = np.random.RandomState(seed)
+
+    eta = np.linspace(eta, 0, max_episodes)
+    epsilon = np.linspace(epsilon, 0, max_episodes)
+
+    q = np.zeros((env.n_states, env.n_actions))
+
+    def select_greedy_action(q_values):
+        max_q = np.max(q_values)
+        best_actions = np.where(q_values == max_q)[0]
+        return random_state.choice(best_actions)
+
+    for i in range(max_episodes):
+        s = env.reset()
+        done = False
+        a = select_greedy_action(q[s])
+
+        while not done:
+            ns, r, done = env.step(a)
+
+            if random_state.rand() < epsilon[i]:
+                na = random_state.randint(env.n_actions)
+            else:
+                na = select_greedy_action(q[ns])
+
+            q[s, a] = q[s, a] + eta[i] * (r + gamma * q[ns, na] - q[s, a])
+            s = ns
+            a = na
+
+    policy = q.argmax(axis=1)
+    value = q.max(axis=1)
+
+    return policy, value
+
+
+def main():
+    seed = 0
+
+    # Big lake
+    # lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '.', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '.', '.', '#', '.', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
+    #         ['.', '#', '#', '.', '.', '.', '#', '.'],
+    #         ['.', '#', '.', '.', '#', '.', '#', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '$']]
+
+    # Small lake
+    lake = [
+        ["&", ".", ".", "."],
+        [".", "#", ".", "#"],
+        [".", ".", ".", "#"],
+        ["#", ".", ".", "$"],
+    ]
+
+    env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
+    gamma = 0.9
+
+    print("# Model-based algorithms")
+
+    print("")
+
+    print("## Policy iteration")
+    policy, value = policy_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+
+    print("")
+
+    print("## Value iteration")
+    policy, value = value_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+
+    print("")
+
+    print("# Model-free algorithms")
+    max_episodes = 4000
+
+    print("")
+
+    print("## Sarsa")
+    policy, value = sarsa(
+        env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+    env.render(policy, value)
+
+    print("")
+
+    # print('## Q-learning')
+    # policy, value = q_learning(env, max_episodes, eta=0.5, gamma=gamma,
+    #                            epsilon=0.5, seed=seed)
+    # env.render(policy, value)
+
+    # print('')
+
+    # linear_env = LinearWrapper(env)
+
+    # print('## Linear Sarsa')
+
+    # parameters = linear_sarsa(linear_env, max_episodes, eta=0.5, gamma=gamma,
+    #                           epsilon=0.5, seed=seed)
+    # policy, value = linear_env.decode_policy(parameters)
+    # linear_env.render(policy, value)
+
+    # print('')
+
+    # print('## Linear Q-learning')
+
+    # parameters = linear_q_learning(linear_env, max_episodes, eta=0.5, gamma=gamma,
+    #                                epsilon=0.5, seed=seed)
+    # policy, value = linear_env.decode_policy(parameters)
+    # linear_env.render(policy, value)
+
+    # print('')
+
+    # image_env = FrozenLakeImageWrapper(env)
+
+    # print('## Deep Q-network learning')
+
+    # dqn = deep_q_network_learning(image_env, max_episodes, learning_rate=0.001,
+    #                               gamma=gamma,  epsilon=0.2, batch_size=32,
+    #                               target_update_frequency=4, buffer_size=256,
+    #                               kernel_size=3, conv_out_channels=4,
+    #                               fc_out_features=8, seed=4)
+    # policy, value = image_env.decode_policy(dqn)
+    # image_env.render(policy, value)
+
+
+if __name__ == "__main__":
+    main()
