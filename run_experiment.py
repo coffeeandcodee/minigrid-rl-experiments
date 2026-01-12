@@ -38,7 +38,7 @@ ENVIRONMENTS = {
     "doorkey_8x8": "MiniGrid-DoorKey-8x8-v0",
 }
 
-SEEDS = [1, 2, 3, 4, 5]
+SEEDS = [1, 2, 3, 4, 5] 
 TOTAL_TIMESTEPS = 50_000
 RESULTS_DIR = "results"
 
@@ -258,6 +258,57 @@ def save_table_markdown(all_results, algos, envs):
 # PLOTTING
 # ============================================================================
 
+def plot_learning_curves():
+    """Plot episode rewards over training for each algorithm."""
+    all_results = load_all_results()
+    
+    if not all_results:
+        print("No results found in results/ directory")
+        return
+    
+    os.makedirs("plots", exist_ok=True)
+    
+    # Group by environment
+    envs = set(r["env"] for r in all_results)
+    
+    for env_key in envs:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        for r in all_results:
+            if r["env"] != env_key:
+                continue
+            
+            timesteps = r.get("timesteps", [])
+            rewards = r.get("episode_rewards", [])
+            
+            if not timesteps or not rewards:
+                continue
+            
+            # Smooth with rolling average
+            window = min(50, len(rewards) // 10 + 1)
+            if len(rewards) > window:
+                smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
+                x = timesteps[window-1:]
+            else:
+                smoothed = rewards
+                x = timesteps
+            
+            label = f"{r['algo']} (seed={r['seed']})"
+            ax.plot(x, smoothed, label=label, alpha=0.8)
+        
+        ax.set_xlabel("Timesteps")
+        ax.set_ylabel("Episode Reward (smoothed)")
+        ax.set_title(f"Learning Curves: {env_key}")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        plot_path = f"plots/learning_curves_{env_key}.png"
+        plt.tight_layout()
+        plt.savefig(plot_path, dpi=150)
+        print(f"Saved: {plot_path}")
+        plt.close()
+
+
 def plot_results():
     """Generate comparison plots from saved results."""
     all_results = load_all_results()
@@ -328,7 +379,9 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed")
     parser.add_argument("--plot", action="store_true",
-                        help="Plot results instead of running experiments")
+                        help="Plot bar chart comparison of final results")
+    parser.add_argument("--curves", action="store_true",
+                        help="Plot learning curves over training")
     parser.add_argument("--table", action="store_true",
                         help="Print results table")
     parser.add_argument("--all", action="store_true",
@@ -338,6 +391,8 @@ if __name__ == "__main__":
     
     if args.table:
         print_table()
+    elif args.curves:
+        plot_learning_curves()
     elif args.plot:
         plot_results()
     elif args.all:
