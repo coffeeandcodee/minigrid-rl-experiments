@@ -37,7 +37,7 @@ ENVIRONMENTS = {
     "doorkey_5x5": "MiniGrid-DoorKey-5x5-v0",
     "doorkey_8x8": "MiniGrid-DoorKey-8x8-v0",
 }
-
+t
 SEEDS = [1, 2, 3, 4, 5] 
 TOTAL_TIMESTEPS = 50_000
 RESULTS_DIR = "results"
