@@ -37,7 +37,10 @@ ENVIRONMENTS = {
     "doorkey_5x5": "MiniGrid-DoorKey-5x5-v0",
     "doorkey_8x8": "MiniGrid-DoorKey-8x8-v0",
 }
-t
+
+
+
+
 SEEDS = [1, 2, 3, 4, 5] 
 TOTAL_TIMESTEPS = 50_000
 RESULTS_DIR = "results"
@@ -127,37 +130,46 @@ def run_single_experiment(algo_name, env_key, seed):
     return results
 
 
-def save_results(results, filename):
-    """Save results to JSON file."""
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    filepath = os.path.join(RESULTS_DIR, filename)
+def save_results(results):
+    """Save results to JSON file in env/algo subdirectory."""
+    env_key = results.get("env", "unknown")
+    algo_name = results.get("algo", "unknown")
+    seed = results.get("seed", 0)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    save_dir = os.path.join(RESULTS_DIR, env_key, algo_name)
+    os.makedirs(save_dir, exist_ok=True)
+    
+    filename = f"seed{seed}_{timestamp}.json"
+    filepath = os.path.join(save_dir, filename)
     with open(filepath, "w") as f:
         json.dump(results, f, indent=2)
     print(f"Saved: {filepath}")
 
 
 def load_all_results():
-    """Load all results from the results directory."""
+    """Load all results from the results directory (including subdirectories)."""
     all_results = []
     if not os.path.exists(RESULTS_DIR):
         return all_results
-    for filename in os.listdir(RESULTS_DIR):
-        if filename.endswith(".json"):
-            with open(os.path.join(RESULTS_DIR, filename)) as f:
-                all_results.append(json.load(f))
+    
+    # Walk through all subdirectories
+    for root, dirs, files in os.walk(RESULTS_DIR):
+        for filename in files:
+            if filename.endswith(".json"):
+                filepath = os.path.join(root, filename)
+                with open(filepath) as f:
+                    all_results.append(json.load(f))
     return all_results
 
 
 def run_all_experiments():
     """Run all algorithm/environment/seed combinations."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
     for algo_name in ALGORITHMS:
         for env_key in ENVIRONMENTS:
             for seed in SEEDS:
                 results = run_single_experiment(algo_name, env_key, seed)
-                filename = f"{algo_name}_{env_key}_seed{seed}_{timestamp}.json"
-                save_results(results, filename)
+                save_results(results)
 
 
 # ============================================================================
@@ -259,7 +271,7 @@ def save_table_markdown(all_results, algos, envs):
 # ============================================================================
 
 def plot_learning_curves():
-    """Plot episode rewards over training for each algorithm."""
+    """Plot episode rewards over training for each algorithm with mean ± std."""
     all_results = load_all_results()
     
     if not all_results:
@@ -271,40 +283,144 @@ def plot_learning_curves():
     # Group by environment
     envs = set(r["env"] for r in all_results)
     
+    # Sophisticated color palette (colorblind-friendly)
+    algo_colors = {
+        "PPO": "#4C72B0",   # Steel blue
+        "A2C": "#55A868",   # Sage green
+        "DQN": "#C44E52",   # Muted red
+    }
+    
+    # Nice display names for environments
+    env_display_names = {
+        "empty_5x5": "Empty-5×5",
+        "empty_8x8": "Empty-8×8",
+        "doorkey_5x5": "DoorKey-5×5",
+        "doorkey_6x6": "DoorKey-6×6",
+    }
+    
     for env_key in envs:
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # Set up figure with clean style
+        fig, ax = plt.subplots(figsize=(10, 6))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
         
-        for r in all_results:
-            if r["env"] != env_key:
+        # Remove top and right spines for cleaner look
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#333333')
+        ax.spines['bottom'].set_color('#333333')
+        
+        # Group results by algorithm
+        algos = set(r["algo"] for r in all_results if r["env"] == env_key)
+        
+        # Store data for annotations
+        algo_data = {}
+        
+        for algo in sorted(algos):
+            algo_runs = [r for r in all_results if r["env"] == env_key and r["algo"] == algo]
+            
+            if not algo_runs:
                 continue
             
-            timesteps = r.get("timesteps", [])
-            rewards = r.get("episode_rewards", [])
+            # Interpolate all runs to common x-axis
+            max_timestep = min(r["timesteps"][-1] for r in algo_runs if r.get("timesteps"))
+            common_x = np.linspace(0, max_timestep, 500)
             
-            if not timesteps or not rewards:
+            all_smoothed = []
+            for r in algo_runs:
+                timesteps = r.get("timesteps", [])
+                rewards = r.get("episode_rewards", [])
+                
+                if not timesteps or not rewards:
+                    continue
+                
+                # Smooth with rolling average
+                window = min(50, len(rewards) // 10 + 1)
+                if len(rewards) > window:
+                    smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
+                    x = timesteps[window-1:]
+                else:
+                    smoothed = rewards
+                    x = timesteps
+                
+                # Interpolate to common x-axis
+                interp_y = np.interp(common_x, x, smoothed)
+                all_smoothed.append(interp_y)
+            
+            if not all_smoothed:
                 continue
             
-            # Smooth with rolling average
-            window = min(50, len(rewards) // 10 + 1)
-            if len(rewards) > window:
-                smoothed = np.convolve(rewards, np.ones(window)/window, mode='valid')
-                x = timesteps[window-1:]
-            else:
-                smoothed = rewards
-                x = timesteps
+            # Calculate mean and std
+            all_smoothed = np.array(all_smoothed)
+            mean = np.mean(all_smoothed, axis=0)
+            std = np.std(all_smoothed, axis=0)
             
-            label = f"{r['algo']} (seed={r['seed']})"
-            ax.plot(x, smoothed, label=label, alpha=0.8)
+            # Store for annotations
+            algo_data[algo] = {"x": common_x, "mean": mean, "std": std}
+            
+            # Plot mean line and shaded std region
+            color = algo_colors.get(algo, "#666666")
+            n_seeds = len(algo_runs)
+            ax.plot(common_x, mean, label=f"{algo} (n={n_seeds})", color=color, 
+                    linewidth=2.5, zorder=3)
+            ax.fill_between(common_x, mean - std, mean + std, alpha=0.15, 
+                            color=color, zorder=2)
         
-        ax.set_xlabel("Timesteps")
-        ax.set_ylabel("Episode Reward (smoothed)")
-        ax.set_title(f"Learning Curves: {env_key}")
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+        # Add annotation for DQN collapse on empty_5x5
+        if env_key == "empty_5x5" and "DQN" in algo_data:
+            dqn_mean = algo_data["DQN"]["mean"]
+            dqn_x = algo_data["DQN"]["x"]
+            # Find collapse point (where it drops below 0.5 after being above 0.7)
+            peak_idx = np.argmax(dqn_mean)
+            if dqn_mean[peak_idx] > 0.7:
+                # Find where it drops
+                collapse_idx = peak_idx
+                for i in range(peak_idx, len(dqn_mean)):
+                    if dqn_mean[i] < 0.4:
+                        collapse_idx = i
+                        break
+                if collapse_idx > peak_idx:
+                    collapse_x = dqn_x[collapse_idx]
+                    collapse_y = dqn_mean[collapse_idx]
+                    ax.annotate('DQN collapse', 
+                                xy=(collapse_x, collapse_y),
+                                xytext=(collapse_x + 5000, collapse_y + 0.25),
+                                fontsize=10, color='#C44E52',
+                                arrowprops=dict(arrowstyle='->', color='#C44E52', lw=1.5),
+                                fontweight='medium')
         
-        plot_path = f"plots/learning_curves_{env_key}.png"
+        # Subtle grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, color='#cccccc')
+        ax.set_axisbelow(True)
+        
+        # Labels with better typography
+        ax.set_xlabel("Timesteps", fontsize=13, fontweight='medium', color='#333333')
+        ax.set_ylabel("Episode Reward", fontsize=13, fontweight='medium', color='#333333')
+        
+        # Title
+        display_name = env_display_names.get(env_key, env_key)
+        ax.set_title(f"Learning Curves: {display_name}", fontsize=15, 
+                     fontweight='bold', color='#222222', pad=15)
+        
+        # Legend with frame
+        legend = ax.legend(fontsize=11, loc='lower right', frameon=True, 
+                          fancybox=True, shadow=False, framealpha=0.9,
+                          edgecolor='#cccccc')
+        legend.get_frame().set_linewidth(0.5)
+        
+        # Axis limits and ticks
+        ax.set_ylim(-0.02, 1.02)
+        ax.set_xlim(0, None)
+        ax.tick_params(axis='both', labelsize=11, colors='#333333')
+        
+        # Format x-axis with thousands separator
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x):,}'))
+        
+        # Save with high quality
+        plot_path = f"plots/{env_key}_learning_curves.png"
         plt.tight_layout()
-        plt.savefig(plot_path, dpi=150)
+        plt.savefig(plot_path, dpi=200, facecolor='white', edgecolor='none',
+                    bbox_inches='tight')
         print(f"Saved: {plot_path}")
         plt.close()
 
@@ -323,8 +439,31 @@ def plot_results():
     
     os.makedirs("plots", exist_ok=True)
     
+    # Sophisticated color palette
+    algo_colors = {
+        "PPO": "#4C72B0",
+        "A2C": "#55A868", 
+        "DQN": "#C44E52",
+    }
+    
+    # Nice display names
+    env_display_names = {
+        "empty_5x5": "Empty-5×5",
+        "empty_8x8": "Empty-8×8",
+        "doorkey_5x5": "DoorKey-5×5",
+        "doorkey_6x6": "DoorKey-6×6",
+    }
+    
     for env_key in envs:
-        plt.figure(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 5))
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
+        
+        # Remove top and right spines
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#333333')
+        ax.spines['bottom'].set_color('#333333')
         
         for algo_name in algos:
             # Get all runs for this algo/env
@@ -333,15 +472,15 @@ def plot_results():
             if not runs:
                 continue
             
-            # Average across seeds (simple version - just plot final eval)
+            # Average across seeds
             means = [r["final_eval_mean"] for r in runs]
-            
             print(f"{env_key} | {algo_name}: {np.mean(means):.3f} ± {np.std(means):.3f}")
         
         # Bar plot of final performance
-        algo_names = list(algos)
+        algo_names = sorted(list(algos))  # Sort for consistent ordering
         means = []
         stds = []
+        colors = []
         
         for algo_name in algo_names:
             runs = [r for r in all_results if r["algo"] == algo_name and r["env"] == env_key]
@@ -352,14 +491,38 @@ def plot_results():
             else:
                 means.append(0)
                 stds.append(0)
+            colors.append(algo_colors.get(algo_name, "#666666"))
         
         x = np.arange(len(algo_names))
-        plt.bar(x, means, yerr=stds, capsize=5, alpha=0.8)
-        plt.xticks(x, algo_names)
-        plt.ylabel("Final Evaluation Reward")
-        plt.title(f"Algorithm Comparison: {env_key}")
+        bars = ax.bar(x, means, yerr=stds, capsize=6, color=colors, 
+                      edgecolor='white', linewidth=1.5, alpha=0.9,
+                      error_kw={'elinewidth': 2, 'capthick': 2, 'ecolor': '#333333'})
+        
+        # Add value labels on bars
+        for i, (bar, mean, std) in enumerate(zip(bars, means, stds)):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + std + 0.03,
+                    f'{mean:.2f}', ha='center', va='bottom', fontsize=12,
+                    fontweight='medium', color='#333333')
+        
+        ax.set_xticks(x)
+        ax.set_xticklabels(algo_names, fontsize=12, fontweight='medium')
+        ax.set_ylabel("Final Evaluation Reward", fontsize=13, fontweight='medium', color='#333333')
+        
+        display_name = env_display_names.get(env_key, env_key)
+        ax.set_title(f"Algorithm Comparison: {display_name}", fontsize=15, 
+                     fontweight='bold', color='#222222', pad=15)
+        
+        ax.set_ylim(0, 1.15)
+        ax.tick_params(axis='both', labelsize=11, colors='#333333')
+        
+        # Subtle grid (horizontal only)
+        ax.yaxis.grid(True, alpha=0.3, linestyle='--', linewidth=0.5, color='#cccccc')
+        ax.set_axisbelow(True)
+        
         plt.tight_layout()
         
+        os.makedirs("plots", exist_ok=True)
         plot_path = f"plots/{env_key}_comparison.png"
         plt.savefig(plot_path, dpi=150)
         print(f"Saved: {plot_path}")
@@ -399,8 +562,6 @@ if __name__ == "__main__":
         run_all_experiments()
     elif args.algo and args.env:
         results = run_single_experiment(args.algo, args.env, args.seed)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{args.algo}_{args.env}_seed{args.seed}_{timestamp}.json"
-        save_results(results, filename)
+        save_results(results)
     else:
         print(__doc__)
