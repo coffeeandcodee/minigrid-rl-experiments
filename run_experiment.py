@@ -1,11 +1,72 @@
 """
-Run RL experiments across multiple algorithms, environments, and seeds.
+Deep Reinforcement Learning Experiment Runner
+==============================================
 
-Usage:
-    python run_experiment.py --algo PPO --env empty_5x5   # Run single config
-    python run_experiment.py --all                        # Run all experiments
-    python run_experiment.py --table                      # Print results table
-    python run_experiment.py --plot                       # Plot saved results
+A comprehensive toolkit for running, tracking, and visualizing RL experiments
+using Stable Baselines 3 on MiniGrid environments.
+
+RUNNING EXPERIMENTS
+-------------------
+Single experiment:
+    python run_experiment.py --algo PPO --env empty_5x5 --seed 1
+    python run_experiment.py --algo DQN --env doorkey_5x5 --seed 42 --timesteps 150000
+
+All combinations (caution: runs many experiments):
+    python run_experiment.py --all
+
+GENERATING VISUALIZATIONS
+-------------------------
+Learning curves (per environment):
+    python run_experiment.py --curves
+    → Saves to: plots/{env_name}/{env_name}_learning_curves.png
+
+Bar chart comparisons (per environment):
+    python run_experiment.py --plot
+    → Saves to: plots/{env_name}/{env_name}_comparison.png
+
+Combined 2x2 grid (all environments):
+    python run_experiment.py --combined
+    → Saves to: plots/combined/all_learning_curves.png
+
+GENERATING TABLES
+-----------------
+Console summary:
+    python run_experiment.py --table
+    → Also saves to: results/summary_table.md
+
+Detailed markdown table:
+    python run_experiment.py --summary
+    → Saves to: plots/combined/summary_table.md
+
+AVAILABLE OPTIONS
+-----------------
+Algorithms: PPO, A2C, DQN
+Environments: empty_5x5, empty_8x8, doorkey_5x5, doorkey_8x8
+
+DIRECTORY STRUCTURE
+-------------------
+results/
+    {env_name}/
+        {algo}/
+            seed{N}_{timestamp}.json    # Raw experiment data
+plots/
+    {env_name}/
+        {env_name}_learning_curves.png  # Learning curves
+        {env_name}_comparison.png       # Bar chart comparison
+    combined/
+        all_learning_curves.png         # 2x2 grid summary
+        summary_table.md                # Markdown results table
+
+EXAMPLES
+--------
+# Run PPO on DoorKey-5x5 with extended training
+python run_experiment.py --algo PPO --env doorkey_5x5 --seed 1 --timesteps 150000
+
+# Generate all visualizations after experiments
+python run_experiment.py --curves && python run_experiment.py --plot
+
+# Quick summary of all results
+python run_experiment.py --table
 """
 
 import gymnasium as gym
@@ -14,6 +75,7 @@ from minigrid.wrappers import ImgObsWrapper
 from stable_baselines3 import PPO, A2C, DQN
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
+from sb3_contrib import QRDQN
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -29,6 +91,7 @@ ALGORITHMS = {
     "PPO": PPO,
     "A2C": A2C,
     "DQN": DQN,
+    "QRDQN": QRDQN,
 }
 
 ENVIRONMENTS = {
@@ -80,11 +143,13 @@ def make_env(env_name):
     return env
 
 
-def run_single_experiment(algo_name, env_key, seed):
+def run_single_experiment(algo_name, env_key, seed, timesteps=None):
     """Run a single experiment and return metrics."""
     
+    timesteps = timesteps or TOTAL_TIMESTEPS
+    
     print(f"\n{'='*60}")
-    print(f"Running: {algo_name} on {env_key} (seed={seed})")
+    print(f"Running: {algo_name} on {env_key} (seed={seed}, timesteps={timesteps})")
     print(f"{'='*60}")
     
     # Setup
@@ -97,7 +162,7 @@ def run_single_experiment(algo_name, env_key, seed):
     
     # Train with callback
     callback = MetricsCallback()
-    model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=callback)
+    model.learn(total_timesteps=timesteps, callback=callback)
     
     # Final evaluation (10 episodes)
     eval_rewards = []
@@ -288,6 +353,7 @@ def plot_learning_curves():
         "PPO": "#4C72B0",   # Steel blue
         "A2C": "#55A868",   # Sage green
         "DQN": "#C44E52",   # Muted red
+        "QRDQN": "#8172B3", # Purple
     }
     
     # Nice display names for environments
@@ -417,7 +483,8 @@ def plot_learning_curves():
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x):,}'))
         
         # Save with high quality
-        plot_path = f"plots/{env_key}_learning_curves.png"
+        os.makedirs(f"plots/{env_key}", exist_ok=True)
+        plot_path = f"plots/{env_key}/{env_key}_learning_curves.png"
         plt.tight_layout()
         plt.savefig(plot_path, dpi=200, facecolor='white', edgecolor='none',
                     bbox_inches='tight')
@@ -444,6 +511,7 @@ def plot_results():
         "PPO": "#4C72B0",
         "A2C": "#55A868", 
         "DQN": "#C44E52",
+        "QRDQN": "#8172B3",
     }
     
     # Nice display names
@@ -522,11 +590,187 @@ def plot_results():
         
         plt.tight_layout()
         
-        os.makedirs("plots", exist_ok=True)
-        plot_path = f"plots/{env_key}_comparison.png"
+        os.makedirs(f"plots/{env_key}", exist_ok=True)
+        plot_path = f"plots/{env_key}/{env_key}_comparison.png"
         plt.savefig(plot_path, dpi=150)
         print(f"Saved: {plot_path}")
         plt.close()
+
+
+def plot_combined_figure():
+    """Create a combined 2x2 grid of learning curves for key environments."""
+    all_results = load_all_results()
+    
+    if not all_results:
+        print("No results found")
+        return
+    
+    # Select environments to include (customize as needed)
+    target_envs = ["empty_5x5", "empty_8x8", "doorkey_5x5", "doorkey_8x8"]
+    available_envs = [e for e in target_envs if any(r["env"] == e for r in all_results)]
+    
+    if len(available_envs) < 2:
+        print("Need at least 2 environments for combined plot")
+        return
+    
+    # Color palette
+    algo_colors = {
+        "PPO": "#4C72B0",
+        "A2C": "#55A868", 
+        "DQN": "#C44E52",
+        "QRDQN": "#8172B3",
+    }
+    
+    env_display_names = {
+        "empty_5x5": "Empty-5×5",
+        "empty_8x8": "Empty-8×8",
+        "doorkey_5x5": "DoorKey-5×5",
+        "doorkey_8x8": "DoorKey-8×8",
+    }
+    
+    # Create 2x2 grid
+    n_envs = len(available_envs)
+    n_cols = 2
+    n_rows = (n_envs + 1) // 2
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows))
+    fig.patch.set_facecolor('white')
+    
+    if n_envs == 1:
+        axes = np.array([[axes]])
+    elif n_rows == 1:
+        axes = axes.reshape(1, -1)
+    
+    for idx, env_key in enumerate(available_envs):
+        row, col = idx // n_cols, idx % n_cols
+        ax = axes[row, col]
+        
+        env_results = [r for r in all_results if r["env"] == env_key]
+        algos = set(r["algo"] for r in env_results)
+        
+        for algo in sorted(algos):
+            algo_results = [r for r in env_results if r["algo"] == algo]
+            color = algo_colors.get(algo, "#333333")
+            
+            # Interpolate to common x-axis
+            max_timestep = max(max(r["timesteps"]) for r in algo_results if r["timesteps"])
+            x_common = np.linspace(0, max_timestep, 500)
+            
+            all_curves = []
+            for r in algo_results:
+                if r["timesteps"] and r["episode_rewards"]:
+                    interp_y = np.interp(x_common, r["timesteps"], r["episode_rewards"])
+                    all_curves.append(interp_y)
+            
+            if all_curves:
+                curves_array = np.array(all_curves)
+                mean_curve = np.mean(curves_array, axis=0)
+                std_curve = np.std(curves_array, axis=0)
+                
+                ax.plot(x_common, mean_curve, color=color, linewidth=2, label=algo)
+                ax.fill_between(x_common, mean_curve - std_curve, mean_curve + std_curve,
+                               color=color, alpha=0.2)
+        
+        ax.set_title(env_display_names.get(env_key, env_key), fontsize=14, fontweight='bold')
+        ax.set_xlabel("Timesteps", fontsize=11)
+        ax.set_ylabel("Episode Reward", fontsize=11)
+        ax.set_ylim(-0.05, 1.05)
+        ax.legend(loc='lower right', fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'{int(x/1000)}k'))
+    
+    # Hide empty subplots
+    for idx in range(len(available_envs), n_rows * n_cols):
+        row, col = idx // n_cols, idx % n_cols
+        axes[row, col].set_visible(False)
+    
+    plt.tight_layout()
+    
+    os.makedirs("plots/combined", exist_ok=True)
+    plot_path = "plots/combined/all_learning_curves.png"
+    plt.savefig(plot_path, dpi=200, facecolor='white', bbox_inches='tight')
+    print(f"Saved: {plot_path}")
+    plt.close()
+
+
+def generate_summary_table():
+    """Generate a clean summary table of all results."""
+    all_results = load_all_results()
+    
+    if not all_results:
+        print("No results found")
+        return
+    
+    # Aggregate by algo and env
+    from collections import defaultdict
+    aggregated = defaultdict(list)
+    
+    for r in all_results:
+        key = (r["algo"], r["env"])
+        aggregated[key].append(r["final_eval_mean"])
+    
+    # Build summary
+    algos = sorted(set(r["algo"] for r in all_results))
+    envs = sorted(set(r["env"] for r in all_results))
+    
+    # Create markdown table
+    lines = []
+    lines.append("# Results Summary Table")
+    lines.append("")
+    lines.append("## Final Evaluation Performance (mean ± std)")
+    lines.append("")
+    
+    header = "| Algorithm | " + " | ".join(envs) + " |"
+    separator = "|---" + "|---" * len(envs) + "|"
+    lines.append(header)
+    lines.append(separator)
+    
+    for algo in algos:
+        row = f"| **{algo}** |"
+        for env in envs:
+            values = aggregated.get((algo, env), [])
+            if values:
+                mean = np.mean(values)
+                std = np.std(values)
+                # Color code: green for >0.5, yellow for >0, red for 0
+                row += f" {mean:.2f} ± {std:.2f} |"
+            else:
+                row += " — |"
+        lines.append(row)
+    
+    lines.append("")
+    lines.append("## Success Rates (reward > 0.5)")
+    lines.append("")
+    
+    header2 = "| Algorithm | " + " | ".join(envs) + " |"
+    lines.append(header2)
+    lines.append(separator)
+    
+    for algo in algos:
+        row = f"| **{algo}** |"
+        for env in envs:
+            values = aggregated.get((algo, env), [])
+            if values:
+                successes = sum(1 for v in values if v > 0.5)
+                total = len(values)
+                row += f" {successes}/{total} |"
+            else:
+                row += " — |"
+        lines.append(row)
+    
+    # Save to file
+    os.makedirs("plots/combined", exist_ok=True)
+    table_path = "plots/combined/summary_table.md"
+    with open(table_path, "w") as f:
+        f.write("\n".join(lines))
+    print(f"Saved: {table_path}")
+    
+    # Also print to console
+    print("\n" + "="*60)
+    print("\n".join(lines))
+    print("="*60)
 
 
 # ============================================================================
@@ -549,6 +793,12 @@ if __name__ == "__main__":
                         help="Print results table")
     parser.add_argument("--all", action="store_true",
                         help="Run all algorithm/environment/seed combinations")
+    parser.add_argument("--timesteps", type=int, default=None,
+                        help=f"Total training timesteps (default: {TOTAL_TIMESTEPS})")
+    parser.add_argument("--combined", action="store_true",
+                        help="Generate combined 2x2 learning curves figure")
+    parser.add_argument("--summary", action="store_true",
+                        help="Generate summary table")
     
     args = parser.parse_args()
     
@@ -558,10 +808,14 @@ if __name__ == "__main__":
         plot_learning_curves()
     elif args.plot:
         plot_results()
+    elif args.combined:
+        plot_combined_figure()
+    elif args.summary:
+        generate_summary_table()
     elif args.all:
         run_all_experiments()
     elif args.algo and args.env:
-        results = run_single_experiment(args.algo, args.env, args.seed)
+        results = run_single_experiment(args.algo, args.env, args.seed, args.timesteps)
         save_results(results)
     else:
         print(__doc__)
