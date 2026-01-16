@@ -2,13 +2,13 @@
 Run RL experiments across multiple algorithms, environments, and seeds.
 
 Usage:
-    python run_experiment.py                          # Run all experiments
-    python run_experiment.py --algo PPO --env empty   # Run single config
-    python run_experiment.py --plot                   # Plot saved results
+    python run_experiment.py --algo PPO --env empty_5x5   # Run single config
+    python run_experiment.py --all                        # Run all experiments
+    python run_experiment.py --table                      # Print results table
+    python run_experiment.py --plot                       # Plot saved results
 """
 
 import gymnasium as gym
-import minigrid
 from minigrid.wrappers import ImgObsWrapper
 from stable_baselines3 import PPO, A2C, DQN
 from stable_baselines3.common.monitor import Monitor
@@ -22,7 +22,6 @@ import torch
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from datetime import datetime
-from torch.utils.tensorboard import SummaryWriter
 
 # ============================================================================
 # CONFIGURATION - Edit these to change what experiments to run
@@ -46,11 +45,10 @@ SEEDS = [1, 2, 3, 4, 5]
 TOTAL_TIMESTEPS = 50000
 RESULTS_DIR = "results"
 
+
 # ============================================================================
 # CUSTOM CNN FOR MINIGRID
 # ============================================================================
-
-
 class MiniGridCNN(BaseFeaturesExtractor):
     def __init__(
         self, observation_space: gym.spaces.Box, features_dim: int = 512
@@ -95,14 +93,13 @@ class MetricsCallback(BaseCallback):
         self._last_num_episodes = 0
 
     def _on_step(self) -> bool:
-        # Only record when a NEW episode finishes
-        num_episodes = len(self.model.ep_info_buffer)
-        if num_episodes > self._last_num_episodes:
-            ep_info = self.model.ep_info_buffer[-1]
-            self.episode_rewards.append(ep_info["r"])
-            self.episode_lengths.append(ep_info["l"])
-            self.timesteps.append(self.num_timesteps)
-            self._last_num_episodes = num_episodes
+        # Check infos for episode completion (works even when buffer is full)
+        infos = self.locals.get("infos", [])
+        for info in infos:
+            if "episode" in info:
+                self.episode_rewards.append(info["episode"]["r"])
+                self.episode_lengths.append(info["episode"]["l"])
+                self.timesteps.append(self.num_timesteps)
         return True
 
 
@@ -134,7 +131,7 @@ def run_single_experiment(algo_name, env_key, seed):
 
     # Create model
     model = algo_class(
-        "CnnPolicy",
+        "MlpPolicy",
         env,
         verbose=0,
         seed=seed,
@@ -157,7 +154,7 @@ def run_single_experiment(algo_name, env_key, seed):
 
     # Final evaluation (10 episodes)
     eval_rewards = []
-    for episode in range(10):
+    for _ in range(10):
         obs, _ = env.reset()
         total_reward = 0
         done = False
@@ -220,6 +217,107 @@ def run_all_experiments():
                 results = run_single_experiment(algo_name, env_key, seed)
                 filename = f"{algo_name}_{env_key}_seed{seed}_{timestamp}.json"
                 save_results(results, filename)
+
+
+# ============================================================================
+# TABLES
+# ============================================================================
+
+
+def print_table():
+    """Print a formatted table of all results."""
+    all_results = load_all_results()
+
+    if not all_results:
+        print("No results found in results/ directory")
+        return
+
+    # Get unique algos and envs
+    algos = sorted(set(r["algo"] for r in all_results))
+    envs = sorted(set(r["env"] for r in all_results))
+
+    # Header
+    print("\n" + "=" * 80)
+    print("RESULTS SUMMARY")
+    print("=" * 80)
+
+    # Table 1: Mean ± Std by Algorithm and Environment
+    print("\n### Final Evaluation Reward (mean ± std across seeds)\n")
+
+    col_width = 18
+
+    # Header row
+    header = "Algorithm".ljust(12) + "".join(e.ljust(col_width) for e in envs)
+    print(header)
+    print("-" * len(header))
+
+    # Data rows
+    for algo in algos:
+        row = algo.ljust(12)
+        for env in envs:
+            runs = [r for r in all_results if r["algo"] == algo and r["env"] == env]
+            if runs:
+                vals = [r["final_eval_mean"] for r in runs]
+                mean, std = np.mean(vals), np.std(vals)
+                row += f"{mean:.3f} ± {std:.3f}".ljust(col_width)
+            else:
+                row += "-".ljust(col_width)
+        print(row)
+
+    # Table 2: Individual runs
+    print("\n\n### All Individual Runs\n")
+    print(
+        f"{'Algorithm':<10} {'Environment':<15} {'Seed':<6} {'Reward':<10} {'Episodes':<10}"
+    )
+    print("-" * 55)
+
+    for r in sorted(all_results, key=lambda x: (x["algo"], x["env"], x["seed"])):
+        n_episodes = len(r.get("episode_rewards", []))
+        print(
+            f"{r['algo']:<10} {r['env']:<15} {r['seed']:<6} {r['final_eval_mean']:<10.3f} {n_episodes:<10}"
+        )
+
+    print("\n" + "=" * 80)
+
+    # Also save as markdown
+    save_table_markdown(all_results, algos, envs)
+
+
+def save_table_markdown(all_results, algos, envs):
+    """Save results as a markdown table."""
+    os.makedirs("results", exist_ok=True)
+
+    with open("results/summary_table.md", "w") as f:
+        f.write("# Experiment Results Summary\n\n")
+
+        # Main comparison table
+        f.write("## Final Evaluation Reward\n\n")
+        f.write("| Algorithm | " + " | ".join(envs) + " |\n")
+        f.write("|" + "---|" * (len(envs) + 1) + "\n")
+
+        for algo in algos:
+            row = f"| {algo} |"
+            for env in envs:
+                runs = [r for r in all_results if r["algo"] == algo and r["env"] == env]
+                if runs:
+                    vals = [r["final_eval_mean"] for r in runs]
+                    mean, std = np.mean(vals), np.std(vals)
+                    row += f" {mean:.3f} ± {std:.3f} |"
+                else:
+                    row += " - |"
+            f.write(row + "\n")
+
+        f.write("\n## Individual Runs\n\n")
+        f.write("| Algorithm | Environment | Seed | Reward | Episodes |\n")
+        f.write("|---|---|---|---|---|\n")
+
+        for r in sorted(all_results, key=lambda x: (x["algo"], x["env"], x["seed"])):
+            n_episodes = len(r.get("episode_rewards", []))
+            f.write(
+                f"| {r['algo']} | {r['env']} | {r['seed']} | {r['final_eval_mean']:.3f} | {n_episodes} |\n"
+            )
+
+    print("Saved: results/summary_table.md")
 
 
 # ============================================================================
@@ -297,16 +395,32 @@ def plot_results():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run RL experiments")
     parser.add_argument(
-        "--algo", type=str, choices=list(ALGORITHMS.keys()), help="Algorithm to use"
+        "--algo",
+        type=str,
+        choices=list(ALGORITHMS.keys()),
+        help="Algorithm to use",
     )
     parser.add_argument(
-        "--env", type=str, choices=list(ENVIRONMENTS.keys()), help="Environment to use"
+        "--env",
+        type=str,
+        choices=list(ENVIRONMENTS.keys()),
+        help="Environment to use",
     )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed",
+    )
     parser.add_argument(
         "--plot",
         action="store_true",
         help="Plot results instead of running experiments",
+    )
+    parser.add_argument(
+        "--table",
+        action="store_true",
+        help="Print results table",
     )
     parser.add_argument(
         "--all",
@@ -316,7 +430,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.plot:
+    if args.table:
+        print_table()
+    elif args.plot:
         plot_results()
     elif args.all:
         run_all_experiments()
@@ -327,7 +443,3 @@ if __name__ == "__main__":
         save_results(results, filename)
     else:
         print(__doc__)
-        print("\nExamples:")
-        print("  python run_experiment.py --algo PPO --env empty_5x5 --seed 42")
-        print("  python run_experiment.py --all")
-        print("  python run_experiment.py --plot")
