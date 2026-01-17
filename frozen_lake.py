@@ -98,8 +98,6 @@ class FrozenLake(Environment):
 
         self.absorbing_state = n_states - 1
 
-        # TODO:
-
         Environment.__init__(self, n_states, n_actions, max_steps, pi, seed=seed)
 
     def coord_to_state(self, x, y):
@@ -570,11 +568,14 @@ class FrozenLakeImageWrapper:
         lake_image = [(lake == c).astype(float) for c in ["&", "#", "$"]]
 
         self.state_image = {
-            lake.absorbing_state: np.stack([np.zeros(lake.shape)] + lake_image)
+            self.env.absorbing_state: np.stack([np.zeros(lake.shape)] + lake_image)
         }
         for state in range(lake.size):
-            # TODO:
-            pass
+            agent_layer = (
+                (np.arange(lake.size) == state).reshape(lake.shape).astype(float)
+            )
+
+            self.state_image[state] = np.stack([agent_layer] + lake_image)
 
     def encode_state(self, state):
         return self.state_image[state]
@@ -629,14 +630,22 @@ class DeepQNetwork(torch.nn.Module):
     def forward(self, x):
         x = torch.tensor(x, dtype=torch.float)
 
-        # TODO:
+        x = self.conv_layer(x)
+        x = torch.nn.functional.relu(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc_layer(x)
+        x = torch.nn.functional.relu(x)
+        x = self.output_layer(x)
+        return x
 
     def train_step(self, transitions, gamma, tdqn):
         states = np.array([transition[0] for transition in transitions])
         actions = np.array([transition[1] for transition in transitions])
         rewards = np.array([transition[2] for transition in transitions])
         next_states = np.array([transition[3] for transition in transitions])
-        dones = np.array([transition[4] for transition in transitions])
+        dones = torch.tensor(
+            [transition[4] for transition in transitions], dtype=torch.float32
+        )
 
         q = self(states)
         q = q.gather(1, torch.Tensor(actions).view(len(transitions), 1).long())
@@ -645,9 +654,8 @@ class DeepQNetwork(torch.nn.Module):
         with torch.no_grad():
             next_q = tdqn(next_states).max(dim=1)[0] * (1 - dones)
 
-        target = torch.Tensor(rewards) + gamma * next_q
+        target = torch.tensor(rewards, dtype=torch.float32) + gamma * next_q
 
-        # TODO: the loss is the mean squared error between `q` and `target`
         loss = torch.nn.functional.mse_loss(q, target)
 
         self.optimizer.zero_grad()
@@ -667,8 +675,10 @@ class ReplayBuffer:
         self.buffer.append(transition)
 
     def draw(self, batch_size):
-        # TODO:
-        pass
+        indices = self.random_state.choice(
+            len(self.buffer), size=batch_size, replace=False
+        )
+        return [self.buffer[i] for i in indices]
 
 
 def deep_q_network_learning(
@@ -817,17 +827,26 @@ def main(lake_selection=None): #defaults to small lake
 
     print("")
 
-    # image_env = FrozenLakeImageWrapper(env)
+    image_env = FrozenLakeImageWrapper(env)
 
-    # print('## Deep Q-network learning')
+    print("## Deep Q-network learning")
 
-    # dqn = deep_q_network_learning(image_env, max_episodes, learning_rate=0.001,
-    #                               gamma=gamma,  epsilon=0.2, batch_size=32,
-    #                               target_update_frequency=4, buffer_size=256,
-    #                               kernel_size=3, conv_out_channels=4,
-    #                               fc_out_features=8, seed=4)
-    # policy, value = image_env.decode_policy(dqn)
-    # image_env.render(policy, value)
+    dqn = deep_q_network_learning(
+        image_env,
+        max_episodes,
+        learning_rate=0.001,
+        gamma=gamma,
+        epsilon=0.2,
+        batch_size=32,
+        target_update_frequency=4,
+        buffer_size=256,
+        kernel_size=3,
+        conv_out_channels=4,
+        fc_out_features=8,
+        seed=4,
+    )
+    policy, value = image_env.decode_policy(dqn)
+    image_env.render(policy, value)
 
 """
 
