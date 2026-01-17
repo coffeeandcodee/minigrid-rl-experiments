@@ -369,26 +369,32 @@ def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
     return policy, value
 
 
-def main():
+def main(lake_selection):
     seed = 0
 
     # Big lake
-    # lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '.', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '.', '.', '#', '.', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
-    #         ['.', '#', '#', '.', '.', '.', '#', '.'],
-    #         ['.', '#', '.', '.', '#', '.', '#', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '$']]
+    b_lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
+             ['.', '.', '.', '.', '.', '.', '.', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '.'],
+             ['.', '.', '.', '.', '.', '#', '.', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '.'],
+             ['.', '#', '#', '.', '.', '.', '#', '.'],
+             ['.', '#', '.', '.', '#', '.', '#', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '$']]
 
     # Small lake
-    lake = [
+    s_lake = [
         ["&", ".", ".", "."],
         [".", "#", ".", "#"],
         [".", ".", ".", "#"],
         ["#", ".", ".", "$"],
     ]
+
+    if lake_selection == "big":
+        lake = b_lake
+    else:
+        lake = s_lake
+
 
     env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
     gamma = 0.9
@@ -462,5 +468,85 @@ def main():
     # image_env.render(policy, value)
 
 
+
+# ===================================================================
+# section 1.7
+# ================================================================
+# define lakes
+b_lake = [ # big lake
+            ['&', '.', '.', '.', '.', '.', '.', '.'],  
+            ['.', '.', '.', '.', '.', '.', '.', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '.'],
+            ['.', '.', '.', '.', '.', '#', '.', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '.'],
+            ['.', '#', '#', '.', '.', '.', '#', '.'],
+            ['.', '#', '.', '.', '#', '.', '#', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '$']
+        ]
+
+s_lake = [ # small lake
+    ["&", ".", ".", "."], 
+    [".", "#", ".", "#"],
+    [".", ".", ".", "#"],
+    ["#", ".", ".", "$"],
+]
+# ================================================================
+
+def question_1(lake=b_lake):
+    seed = 0
+    print(f"1. big lake p_i vs v_i")
+
+    env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
+    gamma = 0.9
+
+    print("# Model-based algorithms")
+
+    print("")
+
+    print("## Policy iteration")
+    policy, value = policy_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+
+    print("")
+
+    print("## Value iteration")
+    policy, value = value_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+
+    print("")
+
+def question_2(lake=s_lake):
+    seed = 0
+    print(f"2. small lake model free")
+
+    env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
+    gamma = 0.9
+
+    print("# Model-free algorithms")
+    max_episodes = 4000
+
+    print("")
+
+    print("## Sarsa")
+    policy, value = sarsa(
+        env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+    env.render(policy, value)
+
+    print("## Q-learning")
+    #implement qlearning
+
+    print("linear Sarsa control")
+    #implement lin sars ctrl
+
+    print("linear Q-learning control")
+    #implement lin q-learning ctrl
+
+    print("deep q-network learning ")
+    #implement dqn learning
+
 if __name__ == "__main__":
-    main()
+    question_1()
+    question_2()
+
+
