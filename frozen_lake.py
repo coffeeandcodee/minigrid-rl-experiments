@@ -707,8 +707,13 @@ def deep_q_network_learning(
 
     epsilon = np.linspace(epsilon, 0, max_episodes)
 
+    episode_returns_arr = np.zeros(max_episodes)  # q2: store discounted return per episode
+
     for i in range(max_episodes):
         state = env.reset()
+
+        episode_return = 0.0
+        t = 0
 
         done = False
         while not done:
@@ -724,6 +729,9 @@ def deep_q_network_learning(
 
             next_state, reward, done = env.step(action)
 
+            episode_return += (gamma**t) * reward
+            t += 1
+
             replay_buffer.append((state, action, reward, next_state, done))
 
             state = next_state
@@ -732,10 +740,12 @@ def deep_q_network_learning(
                 transitions = replay_buffer.draw(batch_size)
                 dqn.train_step(transitions, gamma, tdqn)
 
+        episode_returns_arr[i] = episode_return
+
         if (i % target_update_frequency) == 0:
             tdqn.load_state_dict(dqn.state_dict())
 
-    return dqn
+    return dqn, episode_returns_arr
 
 """ main node in use atm
 def main(lake_selection=None): #defaults to small lake
@@ -938,8 +948,23 @@ def question_2(lake=s_lake):
     _, linear_q_learning_returns = linear_q_learning(
         linear_env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
     )
-    print("deep q-network learning ")
-    #implement dqn learning
+    print("## Deep Q-network learning")
+    image_env = FrozenLakeImageWrapper(env)
+    _, dqn_returns = deep_q_network_learning(
+        image_env,
+        max_episodes,
+        learning_rate=0.001,
+        gamma=gamma,
+        epsilon=0.2,
+        batch_size=32,
+        target_update_frequency=4,
+        buffer_size=256,
+        kernel_size=3,
+        conv_out_channels=4,
+        fc_out_features=8,
+        seed=4,  # Using seed=4 as per assignment example
+    )
+
 
     print("Plotting results...")
 
@@ -950,6 +975,7 @@ def question_2(lake=s_lake):
     q_learning_ma = np.convolve(q_learning_returns, np.ones(window)/window, mode='valid')
     linear_sarsa_ma = np.convolve(linear_sarsa_returns, np.ones(window)/window, mode='valid')
     linear_q_learning_ma = np.convolve(linear_q_learning_returns, np.ones(window)/window, mode='valid')
+    dqn_ma = np.convolve(dqn_returns, np.ones(window) / window, mode="valid")
     
     # The x-axis for the moving average starts after the first window
     x_axis = np.arange(window - 1, max_episodes)
@@ -960,6 +986,7 @@ def question_2(lake=s_lake):
     plt.plot(x_axis, q_learning_ma, label='Q-Learning')
     plt.plot(x_axis, linear_sarsa_ma, label='Linear Sarsa')
     plt.plot(x_axis, linear_q_learning_ma, label='Linear Q-Learning')
+    plt.plot(x_axis, dqn_ma, label="Deep Q-Network")
     
     plt.xlabel('Episode Number')
     plt.ylabel(f'Discounted Return (Moving Average over {window} episodes)')
