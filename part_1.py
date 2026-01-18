@@ -1,6 +1,8 @@
 from collections import deque
 import numpy as np
 import contextlib
+import matplotlib.pyplot as plt
+import sys
 
 import torch
 
@@ -302,7 +304,7 @@ def policy_iteration(env, gamma, theta, max_iterations, policy=None):
 
         policy = new_policy
 
-    return policy, value
+    return policy, value, i + 1 # q1: (i + ..) returns the number of iterations
 
 
 def value_iteration(env, gamma, theta, max_iterations, value=None):
@@ -331,7 +333,7 @@ def value_iteration(env, gamma, theta, max_iterations, value=None):
             break
 
     policy = policy_improvement(env, value, gamma)
-    return policy, value
+    return policy, value, i + 1 # q1: (same utility as policy iter)
 
 
 def select_greedy_action(q_row, epsilon, random_state):
@@ -352,15 +354,22 @@ def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
     epsilon = np.linspace(epsilon, 0, max_episodes)
 
     q = np.zeros((env.n_states, env.n_actions))
+    episode_returns_arr = np.zeros(max_episodes) # q2: stores discounted return per episode
 
     for i in range(max_episodes):
         s = env.reset()
         done = False
 
+        episode_return = 0.0
+        t = 0
+
         a = select_greedy_action(q[s], epsilon[i], random_state)
 
         while not done:
             ns, r, done = env.step(a)
+            episode_return += (gamma ** t) * r
+            t += 1
+
 
             if done:
                 q[s, a] += eta[i] * (r - q[s, a])
@@ -371,11 +380,12 @@ def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
 
             s = ns
             a = na
+        episode_returns_arr[i] = episode_return
 
     policy = q.argmax(axis=1)
     value = q.max(axis=1)
 
-    return policy, value
+    return policy, value, episode_returns_arr
 
 
 def q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
@@ -385,21 +395,34 @@ def q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
     epsilon = np.linspace(epsilon, 0, max_episodes)
 
     q = np.zeros((env.n_states, env.n_actions))
+    episode_returns_arr = np.zeros(max_episodes) # q2: (same utility as sarsa)
+
 
     for i in range(max_episodes):
         s = env.reset()
         done = False
 
+        episode_return = 0.0
+        t = 0
+
+
         while not done:
             a = select_greedy_action(q[s], epsilon[i], random_state)
             ns, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
             q[s, a] = q[s, a] + eta[i] * (r + gamma * np.max(q[ns]) - q[s, a])
             s = ns
+
+        episode_returns_arr[i] = episode_return
+
 
     policy = q.argmax(axis=1)
     value = q.max(axis=1)
 
-    return policy, value
+    return policy, value, episode_returns_arr
 
 
 class LinearWrapper:
@@ -450,6 +473,8 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
     epsilon = np.linspace(epsilon, 0, max_episodes)
 
     theta = np.zeros(env.n_features)
+    episode_returns_arr = np.zeros(max_episodes) # q2: (same util; q, sarsa)
+
 
     for i in range(max_episodes):
         features = env.reset()
@@ -458,8 +483,16 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
         a = select_greedy_action(q, epsilon[i], random_state)
         done = False
 
+        episode_return = 0.0
+        t = 0
+
         while not done:
             ns_features, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
+
             ns_q = ns_features.dot(theta)
 
             if done:
@@ -475,7 +508,9 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
             q = ns_q
             a = a_next
 
-    return theta
+        episode_returns_arr[i] = episode_return
+
+    return theta, episode_returns_arr
 
 
 def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
@@ -485,16 +520,26 @@ def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
     epsilon = np.linspace(epsilon, 0, max_episodes)
 
     theta = np.zeros(env.n_features)
+    episode_returns_arr = np.zeros(max_episodes) # q2: (same util; q, sarsa, lin_q) 
 
     for i in range(max_episodes):
         features = env.reset()
         done = False
+
+        episode_return = 0.0
+        t = 0
+
 
         while not done:
             q = features.dot(theta)
             a = select_greedy_action(q, epsilon[i], random_state)
 
             ns_features, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
+
             ns_q = ns_features.dot(theta)
 
             if done:
@@ -506,7 +551,9 @@ def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
             theta = theta + eta[i] * delta * features[a]
             features = ns_features
 
-    return theta
+        episode_returns_arr[i] = episode_return
+
+    return theta, episode_returns_arr
 
 
 class FrozenLakeImageWrapper:
@@ -690,27 +737,33 @@ def deep_q_network_learning(
 
     return dqn
 
-
-def main():
+""" main node in use atm
+def main(lake_selection=None): #defaults to small lake
     seed = 0
 
     # Big lake
-    # lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '.', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
-    #         ['.', '.', '.', '.', '.', '#', '.', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
-    #         ['.', '#', '#', '.', '.', '.', '#', '.'],
-    #         ['.', '#', '.', '.', '#', '.', '#', '.'],
-    #         ['.', '.', '.', '#', '.', '.', '.', '$']]
+    b_lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
+             ['.', '.', '.', '.', '.', '.', '.', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '.'],
+             ['.', '.', '.', '.', '.', '#', '.', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '.'],
+             ['.', '#', '#', '.', '.', '.', '#', '.'],
+             ['.', '#', '.', '.', '#', '.', '#', '.'],
+             ['.', '.', '.', '#', '.', '.', '.', '$']]
 
     # Small lake
-    lake = [
+    s_lake = [
         ["&", ".", ".", "."],
         [".", "#", ".", "#"],
         [".", ".", ".", "#"],
         ["#", ".", ".", "$"],
     ]
+
+    if lake_selection == "big":
+        lake = b_lake
+    else:
+        lake = s_lake
+
 
     env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
     gamma = 0.9
@@ -720,13 +773,13 @@ def main():
     print("")
 
     print("## Policy iteration")
-    policy, value = policy_iteration(env, gamma, theta=0.001, max_iterations=128)
+    policy, value, iterations = policy_iteration(env, gamma, theta=0.001, max_iterations=128)
     env.render(policy, value)
 
     print("")
 
     print("## Value iteration")
-    policy, value = value_iteration(env, gamma, theta=0.001, max_iterations=128)
+    policy, value, iterations = value_iteration(env, gamma, theta=0.001, max_iterations=128)
     env.render(policy, value)
 
     print("")
@@ -795,6 +848,412 @@ def main():
     policy, value = image_env.decode_policy(dqn)
     image_env.render(policy, value)
 
+"""
+
+# ===================================================================
+# section 1.7
+# ================================================================
+# define lakes
+b_lake = [ # big lake
+            ['&', '.', '.', '.', '.', '.', '.', '.'],  
+            ['.', '.', '.', '.', '.', '.', '.', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '.'],
+            ['.', '.', '.', '.', '.', '#', '.', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '.'],
+            ['.', '#', '#', '.', '.', '.', '#', '.'],
+            ['.', '#', '.', '.', '#', '.', '#', '.'],
+            ['.', '.', '.', '#', '.', '.', '.', '$']
+        ]
+
+s_lake = [ # small lake
+    ["&", ".", ".", "."], 
+    [".", "#", ".", "#"],
+    [".", ".", ".", "#"],
+    ["#", ".", ".", "$"],
+]
+# ================================================================
+
+
+# ================================================================
+# 1.
+#=================================================================
+def question_1(lake=b_lake):
+    seed = 0
+    print(f"1. big lake p_i vs v_i")
+
+    env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
+    gamma = 0.9
+
+    print("# Model-based algorithms")
+
+    print("")
+
+    print("## Policy iteration")
+    policy, value, iterations = policy_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+    print(f"Iterations: {iterations}")
+
+    print("")
+
+    print("## Value iteration")
+    policy, value, iterations = value_iteration(env, gamma, theta=0.001, max_iterations=128)
+    env.render(policy, value)
+    print(f"Iterations: {iterations}")
+
+    print("")
+
+
+# ================================================================
+# 2.
+#=================================================================
+def question_2(lake=s_lake):
+    seed = 0
+    print(f"2. small lake model free")
+
+    env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
+    gamma = 0.9
+
+    print("# Model-free algorithms")
+    max_episodes = 4000
+
+    print("")
+
+    print("## Sarsa")
+    _, _, sarsa_returns = sarsa(
+        env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+
+    print("## Q-learning")
+    _, _, q_learning_returns = q_learning(
+        env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+
+    linear_env = LinearWrapper(env)
+    print("linear Sarsa control")
+    _, linear_sarsa_returns = linear_sarsa(
+        linear_env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+
+    print("linear Q-learning control")
+    _, linear_q_learning_returns = linear_q_learning(
+        linear_env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
+    )
+    print("deep q-network learning ")
+    #implement dqn learning
+
+    print("Plotting results...")
+
+    # --- Plotting ---
+    window = 20
+    
+    sarsa_ma = np.convolve(sarsa_returns, np.ones(window)/window, mode='valid')
+    q_learning_ma = np.convolve(q_learning_returns, np.ones(window)/window, mode='valid')
+    linear_sarsa_ma = np.convolve(linear_sarsa_returns, np.ones(window)/window, mode='valid')
+    linear_q_learning_ma = np.convolve(linear_q_learning_returns, np.ones(window)/window, mode='valid')
+    
+    # The x-axis for the moving average starts after the first window
+    x_axis = np.arange(window - 1, max_episodes)
+    
+    plt.figure(figsize=(12, 8))
+    
+    plt.plot(x_axis, sarsa_ma, label='Sarsa')
+    plt.plot(x_axis, q_learning_ma, label='Q-Learning')
+    plt.plot(x_axis, linear_sarsa_ma, label='Linear Sarsa')
+    plt.plot(x_axis, linear_q_learning_ma, label='Linear Q-Learning')
+    
+    plt.xlabel('Episode Number')
+    plt.ylabel(f'Discounted Return (Moving Average over {window} episodes)')
+    plt.title('Comparison of Model-Free Algorithms on Small Frozen Lake')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+# ================================================================
+# 3.
+#=================================================================
+# ===================================================================
+# q3: Helper functions for Question 3: Hyperparameter Tuning
+# These are modified versions of sarsa and q_learning to find
+# the number of episodes required to converge to an optimal policy.
+# ===================================================================
+
+def sarsa_for_q3(
+    env,
+    max_episodes,
+    eta,
+    gamma,
+    epsilon,
+    seed=None,
+    optimal_policy=None,
+    convergence_patience=20,
+):
+    """SARSA algorithm modified to return episodes to convergence."""
+    random_state = np.random.RandomState(seed)
+
+    eta_decay = np.linspace(eta, 0, max_episodes)
+    epsilon_decay = np.linspace(epsilon, 0, max_episodes)
+
+    q = np.zeros((env.n_states, env.n_actions))
+    patience_counter = 0
+
+    for i in range(max_episodes):
+        s = env.reset()
+        a = select_greedy_action(q[s], epsilon_decay[i], random_state)
+        done = False
+
+        while not done:
+            ns, r, done = env.step(a)
+
+            if done:
+                q[s, a] += eta_decay[i] * (r - q[s, a])
+                break
+
+            na = select_greedy_action(q[ns], epsilon_decay[i], random_state)
+            q[s, a] += eta_decay[i] * (r + gamma * q[ns, na] - q[s, a])
+
+            s = ns
+            a = na
+
+        # q3: Check for convergence against the optimal policy
+        if optimal_policy is not None:
+            current_policy = q.argmax(axis=1)
+            if np.array_equal(current_policy[:-1], optimal_policy[:-1]):
+                patience_counter += 1
+            else:
+                patience_counter = 0  # Reset if policy changes
+
+            if patience_counter >= convergence_patience:
+                return i + 1  # Return episodes to converge
+
+    return max_episodes  # Return max_episodes if not converged
+
+def q_learning_for_q3(
+    env,
+    max_episodes,
+    eta,
+    gamma,
+    epsilon,
+    seed=None,
+    optimal_policy=None,
+    convergence_patience=20,
+):
+    """Q-learning algorithm modified to return episodes to convergence."""
+    random_state = np.random.RandomState(seed)
+
+    eta_decay = np.linspace(eta, 0, max_episodes)
+    epsilon_decay = np.linspace(epsilon, 0, max_episodes)
+
+    q = np.zeros((env.n_states, env.n_actions))
+    patience_counter = 0
+
+    for i in range(max_episodes):
+        s = env.reset()
+        done = False
+
+        while not done:
+            a = select_greedy_action(q[s], epsilon_decay[i], random_state)
+            ns, r, done = env.step(a)
+            q[s, a] = q[s, a] + eta_decay[i] * (r + gamma * np.max(q[ns]) - q[s, a])
+            s = ns
+
+        if optimal_policy is not None:
+            current_policy = q.argmax(axis=1)
+            if np.array_equal(current_policy[:-1], optimal_policy[:-1]):
+                patience_counter += 1
+            else:
+                patience_counter = 0
+
+            if patience_counter >= convergence_patience:
+                return i + 1
+
+    return max_episodes
+
+def question_3(s_lake, b_lake):
+    # q3: Implementation for question 3
+    seed = 0
+    gamma = 0.9
+    max_episodes_small = 10000  # Max episodes for small lake search
+    max_episodes_big = 20000  # Max episodes for big lake search
+
+    # --- Part 1: Small Frozen Lake ---
+    print("\n--- Question 3: Hyperparameter Tuning ---")
+    print("\n--- Part 1: Small Frozen Lake ---")
+
+    s_env = FrozenLake(s_lake, slip=0.1, max_steps=100, seed=seed)
+    s_optimal_policy, s_optimal_value, _ = policy_iteration(
+        s_env, gamma, theta=0.001, max_iterations=128
+    )
+
+    print("Optimal policy for small lake found via Policy Iteration:")
+    s_env.render(s_optimal_policy, s_optimal_value)
+
+    # q3: Define hyperparameter search space
+    etas = [0.1, 0.3, 0.5, 0.7, 0.9]
+    epsilons = [0.1, 0.3, 0.5, 0.7, 0.9]
+
+    # q3: Helper function to run the tuning process and report results
+    def tune_and_report(algo_name, algo_func, env, optimal_policy, max_episodes):
+        print(f"\n--- Tuning {algo_name} ---")
+        best_params = {"eta": -1, "epsilon": -1}
+        min_episodes = float("inf")
+
+        for eta in etas:
+            for epsilon in epsilons:
+                # q3: Run multiple seeds for robustness and average the results
+                episodes_needed_list = []
+                for run_seed in range(3):  # 3 seeds for averaging
+                    episodes_needed = algo_func(
+                        env,
+                        max_episodes,
+                        eta,
+                        gamma,
+                        epsilon,
+                        seed=seed + run_seed,
+                        optimal_policy=optimal_policy,
+                        convergence_patience=20,
+                    )
+                    episodes_needed_list.append(episodes_needed)
+
+                avg_episodes = np.mean(episodes_needed_list)
+
+                print(
+                    f"  {algo_name} with eta={eta}, epsilon={epsilon}: ~{avg_episodes:.0f} episodes to converge."
+                )
+
+                if avg_episodes < min_episodes:
+                    min_episodes = avg_episodes
+                    best_params["eta"] = eta
+                    best_params["epsilon"] = epsilon
+
+        if min_episodes >= max_episodes:
+            print(
+                f"\nBest result for {algo_name}: Did not converge within {max_episodes} episodes."
+            )
+        else:
+            print(f"\nBest result for {algo_name}:")
+            print(f"  - Minimized episodes: ~{min_episodes:.0f}")
+            print(f"  - Best eta: {best_params['eta']}")
+            print(f"  - Best epsilon: {best_params['epsilon']}")
+        return best_params, min_episodes
+
+    # q3: Tune Sarsa and Q-learning for the small lake
+    sarsa_best_params, sarsa_min_episodes = tune_and_report(
+        "Sarsa", sarsa_for_q3, s_env, s_optimal_policy, max_episodes_small
+    )
+    q_learning_best_params, q_learning_min_episodes = tune_and_report(
+        "Q-learning", q_learning_for_q3, s_env, s_optimal_policy, max_episodes_small
+    )
+
+    # --- Part 2: Big Frozen Lake ---
+    print("\n\n--- Part 2: Big Frozen Lake ---")
+    b_env = FrozenLake(b_lake, slip=0.1, max_steps=200, seed=seed)
+    b_optimal_policy, b_optimal_value, _ = policy_iteration(
+        b_env, gamma, theta=0.001, max_iterations=128
+    )
+
+    print("Optimal policy for big lake found via Policy Iteration:")
+    b_env.render(b_optimal_policy, b_optimal_value)
+
+    # q3: Tune Sarsa and Q-learning for the big lake
+    tune_and_report("Sarsa", sarsa_for_q3, b_env, b_optimal_policy, max_episodes_big)
+    tune_and_report(
+        "Q-learning", q_learning_for_q3, b_env, b_optimal_policy, max_episodes_big
+    )
+
+    
+def question_4():
+    # q4: Implementation for question 4
+    print("\n\n--- Question 4: Linear Function Approximation Interpretation ---")
+    print(
+        """
+1. How can each element of the parameter vector θ be interpreted?
+-----------------------------------------------------------------
+In the linear function approximation implemented in `LinearWrapper`, each state-action 
+pair (s, a) is represented by a one-hot encoded feature vector φ(s, a). This vector 
+has a size of |S| * |A| and contains all zeros except for a single '1' at a unique 
+index corresponding to that specific (s, a) pair.
+
+The action-value function is approximated as a linear combination of these features:
+  Q(s, a) ≈ θᵀφ(s, a)
+
+Because φ(s, a) is a one-hot vector, the dot product θᵀφ(s, a) simply selects the 
+single element from the parameter vector θ at the position where φ(s, a) has its '1'.
+
+Therefore, each element θ_i in the parameter vector θ can be interpreted directly as 
+the estimated Q-value for a specific state-action pair. The vector θ is effectively 
+a "flattened" version of the Q-table used in tabular methods.
+
+
+2. Why are tabular model-free algorithms a special case of non-tabular ones?
+---------------------------------------------------------------------------
+The tabular model-free algorithms (Sarsa, Q-learning) are a special case of their 
+non-tabular (linear function approximation) counterparts for the following reasons:
+
+a) Equivalent Representation:
+   As explained above, using a one-hot feature representation for each state-action 
+   pair makes the linear model's parameter vector θ equivalent to a tabular Q-table. 
+   There is a one-to-one mapping between an element in θ and a cell in the Q-table.
+
+b) Equivalent Update Rule:
+   The update rule for linear Q-learning is a form of semi-gradient descent:
+     θ ← θ + η * [r + γ * max_a' Q(s', a') - Q(s, a)] * ∇_θ(Q(s, a))
+   
+   Since Q(s, a) = θᵀφ(s, a), the gradient ∇_θ(Q(s, a)) is simply the feature 
+   vector φ(s, a). The update becomes:
+     θ ← θ + η * (TD_error) * φ(s, a)
+
+   When φ(s, a) is a one-hot vector, multiplying by it only affects the single 
+   component of θ corresponding to the (s, a) pair. This update is identical to 
+   the tabular Q-learning update, which modifies only one cell in the Q-table:
+     Q(s, a) ← Q(s, a) + η * (TD_error)
+
+In conclusion, the tabular method is not a different kind of algorithm, but rather 
+the linear function approximation algorithm using a specific, simple feature set 
+(the identity/one-hot representation), which makes it behave exactly like a lookup table.
+"""
+    )
+
+class Tee:
+    """A helper class to redirect stdout to both console and a file."""
+    def __init__(self, *files):
+        self.files = files
+    def write(self, obj):
+        for f in self.files:
+            f.write(obj)
+            f.flush()  # Flush to see output in real-time
+    def flush(self):
+        for f in self.files:
+            f.flush()
+
 
 if __name__ == "__main__":
-    main()
+    # The assignment requires the output of the main function to be stored in output.txt
+    # We will write the output for Q1, Q2, Q3 to both the console and a file.
+    output_filename = "output.txt"
+    print(f"Running questions 1, 2, and 3. Output will be printed to console and saved to '{output_filename}'...")
+    print("Note: The plot for Question 2 will be displayed in a separate window. Please save it manually if needed.")
+
+    original_stdout = sys.stdout  # Save a reference to the original standard output
+
+    # The 'encoding' is set to 'utf-8' to handle special characters.
+    with open(output_filename, 'w', encoding='utf-8') as f:
+        # Create a Tee object to write to both original stdout and the file
+        tee = Tee(original_stdout, f)
+        sys.stdout = tee
+
+        try:
+            # Call the functions whose output we want to capture
+            question_1()
+            # Note: plt.show() in question_2() is blocking and will pause execution here until the plot is closed.
+            question_2()
+            question_3(s_lake, b_lake)
+        finally:
+            # Restore stdout to its original state
+            sys.stdout = original_stdout
+
+    print(f"\nFinished. Output for questions 1, 2, and 3 also saved to '{output_filename}'.")
+
+    # Run question 4 and print its output to the console as it's a conceptual question.
+    #question_4()
