@@ -747,33 +747,26 @@ def deep_q_network_learning(
 
     return dqn, episode_returns_arr
 
-""" main node in use atm
-def main(lake_selection=None): #defaults to small lake
+def main():
     seed = 0
 
     # Big lake
-    b_lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
-             ['.', '.', '.', '.', '.', '.', '.', '.'],
-             ['.', '.', '.', '#', '.', '.', '.', '.'],
-             ['.', '.', '.', '.', '.', '#', '.', '.'],
-             ['.', '.', '.', '#', '.', '.', '.', '.'],
-             ['.', '#', '#', '.', '.', '.', '#', '.'],
-             ['.', '#', '.', '.', '#', '.', '#', '.'],
-             ['.', '.', '.', '#', '.', '.', '.', '$']]
+    #lake = [['&', '.', '.', '.', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '.', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
+    #         ['.', '.', '.', '.', '.', '#', '.', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '.'],
+    #         ['.', '#', '#', '.', '.', '.', '#', '.'],
+    #         ['.', '#', '.', '.', '#', '.', '#', '.'],
+    #         ['.', '.', '.', '#', '.', '.', '.', '$']]
 
     # Small lake
-    s_lake = [
+    lake = [
         ["&", ".", ".", "."],
         [".", "#", ".", "#"],
         [".", ".", ".", "#"],
         ["#", ".", ".", "$"],
     ]
-
-    if lake_selection == "big":
-        lake = b_lake
-    else:
-        lake = s_lake
-
 
     env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
     gamma = 0.9
@@ -858,10 +851,8 @@ def main(lake_selection=None): #defaults to small lake
     policy, value = image_env.decode_policy(dqn)
     image_env.render(policy, value)
 
-"""
-
 # ===================================================================
-# section 1.7
+# section 1.7 question 1 - 3
 # ================================================================
 # define lakes
 b_lake = [ # big lake
@@ -917,40 +908,32 @@ def question_1(lake=b_lake):
 # 2.
 #=================================================================
 def question_2(lake=s_lake):
+    print(f"2. small lake model-free algo returns experiment")
     seed = 0
-    print(f"2. small lake model free")
 
     env = FrozenLake(lake, slip=0.1, max_steps=16, seed=seed)
     gamma = 0.9
-
-    print("# Model-free algorithms")
     max_episodes = 4000
 
-    print("")
-
-    print("## Sarsa")
-    _, _, sarsa_returns = sarsa(
+    _, _, sarsa_returns = sarsa( # sarsa
         env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
     )
 
-    print("## Q-learning")
-    _, _, q_learning_returns = q_learning(
+    _, _, q_learning_returns = q_learning( #q-learning
         env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
     )
 
     linear_env = LinearWrapper(env)
-    print("linear Sarsa control")
-    _, linear_sarsa_returns = linear_sarsa(
+    _, linear_sarsa_returns = linear_sarsa( #linear sarsa
         linear_env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
     )
 
-    print("linear Q-learning control")
-    _, linear_q_learning_returns = linear_q_learning(
+    _, linear_q_learning_returns = linear_q_learning( #linear q learning control
         linear_env, max_episodes, eta=0.5, gamma=gamma, epsilon=0.5, seed=seed
     )
-    print("## Deep Q-network learning")
+
     image_env = FrozenLakeImageWrapper(env)
-    _, dqn_returns = deep_q_network_learning(
+    _, dqn_returns = deep_q_network_learning( #deep q nework
         image_env,
         max_episodes,
         learning_rate=0.001,
@@ -964,6 +947,15 @@ def question_2(lake=s_lake):
         fc_out_features=8,
         seed=4,  # Using seed=4 as per assignment example
     )
+
+    # q2: Print the sum of discounted returns for each algorithm
+    print("\n--- Total Discounted Returns (Sum over all episodes) ---")
+    print(f"Sarsa: {np.sum(sarsa_returns):.2f}")
+    print(f"Q-Learning: {np.sum(q_learning_returns):.2f}")
+    print(f"Linear Sarsa: {np.sum(linear_sarsa_returns):.2f}")
+    print(f"Linear Q-Learning: {np.sum(linear_q_learning_returns):.2f}")
+    print(f"Deep Q-Network: {np.sum(dqn_returns):.2f}")
+    print("------------------------------------------------------\n")
 
 
     print("Plotting results...")
@@ -994,7 +986,10 @@ def question_2(lake=s_lake):
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.show()
+    plot_filename = "1_7_q2_plot.png"
+    plt.savefig(plot_filename)
+    plt.close()  # Free up memory
+    print(f"Plot for Question 2 saved to '{plot_filename}'")
 
 
 # ================================================================
@@ -1188,60 +1183,7 @@ def question_3(s_lake, b_lake):
     tune_and_report(
         "Q-learning", q_learning_for_q3, b_env, b_optimal_policy, max_episodes_big
     )
-
     
-def question_4():
-    # q4: Implementation for question 4
-    print("\n\n--- Question 4: Linear Function Approximation Interpretation ---")
-    print(
-        """
-1. How can each element of the parameter vector θ be interpreted?
------------------------------------------------------------------
-In the linear function approximation implemented in `LinearWrapper`, each state-action 
-pair (s, a) is represented by a one-hot encoded feature vector φ(s, a). This vector 
-has a size of |S| * |A| and contains all zeros except for a single '1' at a unique 
-index corresponding to that specific (s, a) pair.
-
-The action-value function is approximated as a linear combination of these features:
-  Q(s, a) ≈ θᵀφ(s, a)
-
-Because φ(s, a) is a one-hot vector, the dot product θᵀφ(s, a) simply selects the 
-single element from the parameter vector θ at the position where φ(s, a) has its '1'.
-
-Therefore, each element θ_i in the parameter vector θ can be interpreted directly as 
-the estimated Q-value for a specific state-action pair. The vector θ is effectively 
-a "flattened" version of the Q-table used in tabular methods.
-
-
-2. Why are tabular model-free algorithms a special case of non-tabular ones?
----------------------------------------------------------------------------
-The tabular model-free algorithms (Sarsa, Q-learning) are a special case of their 
-non-tabular (linear function approximation) counterparts for the following reasons:
-
-a) Equivalent Representation:
-   As explained above, using a one-hot feature representation for each state-action 
-   pair makes the linear model's parameter vector θ equivalent to a tabular Q-table. 
-   There is a one-to-one mapping between an element in θ and a cell in the Q-table.
-
-b) Equivalent Update Rule:
-   The update rule for linear Q-learning is a form of semi-gradient descent:
-     θ ← θ + η * [r + γ * max_a' Q(s', a') - Q(s, a)] * ∇_θ(Q(s, a))
-   
-   Since Q(s, a) = θᵀφ(s, a), the gradient ∇_θ(Q(s, a)) is simply the feature 
-   vector φ(s, a). The update becomes:
-     θ ← θ + η * (TD_error) * φ(s, a)
-
-   When φ(s, a) is a one-hot vector, multiplying by it only affects the single 
-   component of θ corresponding to the (s, a) pair. This update is identical to 
-   the tabular Q-learning update, which modifies only one cell in the Q-table:
-     Q(s, a) ← Q(s, a) + η * (TD_error)
-
-In conclusion, the tabular method is not a different kind of algorithm, but rather 
-the linear function approximation algorithm using a specific, simple feature set 
-(the identity/one-hot representation), which makes it behave exactly like a lookup table.
-"""
-    )
-
 class Tee:
     """A helper class to redirect stdout to both console and a file."""
     def __init__(self, *files):
@@ -1273,14 +1215,11 @@ if __name__ == "__main__":
         try:
             # Call the functions whose output we want to capture
             question_1()
-            # Note: plt.show() in question_2() is blocking and will pause execution here until the plot is closed.
             question_2()
+            # Note: plt.show() in question_2() is blocking and will pause execution here until the plot is closed.
             question_3(s_lake, b_lake)
         finally:
             # Restore stdout to its original state
             sys.stdout = original_stdout
 
     print(f"\nFinished. Output for questions 1, 2, and 3 also saved to '{output_filename}'.")
-
-    # Run question 4 and print its output to the console as it's a conceptual question.
-    #question_4()
