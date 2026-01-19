@@ -83,6 +83,55 @@ import json
 import argparse
 from datetime import datetime
 
+
+# ============================================================================
+# EXPLORATION BONUS WRAPPER - Count-based intrinsic motivation
+# ============================================================================
+
+class ExplorationBonusWrapper(gym.Wrapper):
+    """
+    Adds count-based intrinsic reward to encourage exploration.
+    
+    Reward bonus = scale / sqrt(visit_count)
+    
+    This implements a simple form of curiosity-driven exploration where
+    novel states receive higher rewards, encouraging the agent to explore
+    less-visited parts of the state space.
+    """
+    
+    def __init__(self, env, bonus_scale=0.1):
+        super().__init__(env)
+        self.visit_counts = {}
+        self.bonus_scale = bonus_scale
+        self.total_intrinsic_reward = 0
+        
+    def reset(self, **kwargs):
+        # Don't reset visit counts - we want to remember across episodes
+        obs, info = self.env.reset(**kwargs)
+        return obs, info
+    
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        
+        # Create hashable state key from observation
+        state_key = tuple(obs.flatten().astype(np.float32))
+        
+        # Update visit count
+        self.visit_counts[state_key] = self.visit_counts.get(state_key, 0) + 1
+        
+        # Calculate intrinsic reward (decreases with visits)
+        intrinsic_reward = self.bonus_scale / np.sqrt(self.visit_counts[state_key])
+        self.total_intrinsic_reward += intrinsic_reward
+        
+        # Add intrinsic reward to extrinsic reward
+        total_reward = reward + intrinsic_reward
+        
+        # Store info for debugging
+        info['intrinsic_reward'] = intrinsic_reward
+        info['unique_states'] = len(self.visit_counts)
+        
+        return obs, total_reward, terminated, truncated, info
+
 # ============================================================================
 # CONFIGURATION - Edit these to change what experiments to run
 # ============================================================================
@@ -99,10 +148,10 @@ ENVIRONMENTS = {
     "empty_8x8": "MiniGrid-Empty-8x8-v0",
     "doorkey_5x5": "MiniGrid-DoorKey-5x5-v0",
     "doorkey_8x8": "MiniGrid-DoorKey-8x8-v0",
+    "four_rooms": "MiniGrid-FourRooms-v0",
+    "distshift1": "MiniGrid-DistShift1-v0",
+    "distshift2": "MiniGrid-DistShift2-v0",
 }
-
-
-
 
 SEEDS = [1, 2, 3, 4, 5] 
 TOTAL_TIMESTEPS = 50_000
@@ -135,26 +184,35 @@ class MetricsCallback(BaseCallback):
 # EXPERIMENT FUNCTIONS
 # ============================================================================
 
-def make_env(env_name):
-    """Create and wrap a MiniGrid environment."""
+def make_env(env_name, exploration_bonus=False, bonus_scale=0.1):
+    """Create and wrap a MiniGrid environment.
+    
+    Args:
+        env_name: MiniGrid environment name
+        exploration_bonus: If True, add count-based exploration reward
+        bonus_scale: Scale of intrinsic reward (default: 0.1)
+    """
     env = gym.make(env_name)
     env = ImgObsWrapper(env)
+    if exploration_bonus:
+        env = ExplorationBonusWrapper(env, bonus_scale=bonus_scale)
     env = Monitor(env)
     return env
 
 
-def run_single_experiment(algo_name, env_key, seed, timesteps=None):
+def run_single_experiment(algo_name, env_key, seed, timesteps=None, exploration_bonus=False, bonus_scale=0.1):
     """Run a single experiment and return metrics."""
     
     timesteps = timesteps or TOTAL_TIMESTEPS
     
+    bonus_str = f", exploration_bonus={bonus_scale}" if exploration_bonus else ""
     print(f"\n{'='*60}")
-    print(f"Running: {algo_name} on {env_key} (seed={seed}, timesteps={timesteps})")
+    print(f"Running: {algo_name} on {env_key} (seed={seed}, timesteps={timesteps}{bonus_str})")
     print(f"{'='*60}")
     
     # Setup
     env_name = ENVIRONMENTS[env_key]
-    env = make_env(env_name)
+    env = make_env(env_name, exploration_bonus=exploration_bonus, bonus_scale=bonus_scale)
     algo_class = ALGORITHMS[algo_name]
     
     # Create model
@@ -188,6 +246,8 @@ def run_single_experiment(algo_name, env_key, seed, timesteps=None):
         "episode_lengths": callback.episode_lengths,
         "final_eval_mean": float(np.mean(eval_rewards)),
         "final_eval_std": float(np.std(eval_rewards)),
+        "exploration_bonus": exploration_bonus,
+        "bonus_scale": bonus_scale if exploration_bonus else None,
     }
     
     print(f"Final eval: {results['final_eval_mean']:.3f} ± {results['final_eval_std']:.3f}")
@@ -361,7 +421,8 @@ def plot_learning_curves():
         "empty_5x5": "Empty-5×5",
         "empty_8x8": "Empty-8×8",
         "doorkey_5x5": "DoorKey-5×5",
-        "doorkey_6x6": "DoorKey-6×6",
+        "doorkey_8x8": "DoorKey-8×8",
+        "four_rooms": "FourRooms",
     }
     
     for env_key in envs:
@@ -519,7 +580,8 @@ def plot_results():
         "empty_5x5": "Empty-5×5",
         "empty_8x8": "Empty-8×8",
         "doorkey_5x5": "DoorKey-5×5",
-        "doorkey_6x6": "DoorKey-6×6",
+        "doorkey_8x8": "DoorKey-8×8",
+        "four_rooms": "FourRooms",
     }
     
     for env_key in envs:
@@ -626,6 +688,7 @@ def plot_combined_figure():
         "empty_8x8": "Empty-8×8",
         "doorkey_5x5": "DoorKey-5×5",
         "doorkey_8x8": "DoorKey-8×8",
+        "four_rooms": "FourRooms",
     }
     
     # Create 2x2 grid
@@ -799,6 +862,10 @@ if __name__ == "__main__":
                         help="Generate combined 2x2 learning curves figure")
     parser.add_argument("--summary", action="store_true",
                         help="Generate summary table")
+    parser.add_argument("--exploration-bonus", action="store_true",
+                        help="Add count-based exploration bonus to rewards")
+    parser.add_argument("--bonus-scale", type=float, default=0.1,
+                        help="Scale of exploration bonus (default: 0.1)")
     
     args = parser.parse_args()
     
@@ -815,7 +882,11 @@ if __name__ == "__main__":
     elif args.all:
         run_all_experiments()
     elif args.algo and args.env:
-        results = run_single_experiment(args.algo, args.env, args.seed, args.timesteps)
+        results = run_single_experiment(
+            args.algo, args.env, args.seed, args.timesteps,
+            exploration_bonus=args.exploration_bonus,
+            bonus_scale=args.bonus_scale
+        )
         save_results(results)
     else:
         print(__doc__)

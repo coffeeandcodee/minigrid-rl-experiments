@@ -2,12 +2,12 @@
 
 ## Final Evaluation Reward
 
-| Algorithm | doorkey_5x5 | doorkey_8x8 | empty_5x5 | empty_8x8 |
-|---|---|---|---|---|
-| A2C | 0.096 ± 0.193 | 0.000 ± 0.000 | 0.944 ± 0.013 | 0.959 ± 0.004 |
-| DQN | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 |
-| PPO | 0.807 ± 0.307 | 0.000 ± 0.000 | 0.955 ± 0.000 | 0.577 ± 0.471 |
-| QRDQN | - | - | 0.000 ± 0.000 | - |
+| Algorithm | doorkey_5x5 (150k) | doorkey_8x8 (200k) | empty_5x5 (50k) | empty_8x8 (50k) | four_rooms (100k) |
+|---|---|---|---|---|---|
+| A2C | 0.096 ± 0.193 | — | 0.944 ± 0.013 | 0.959 ± 0.004 | 0.020 ± 0.040 |
+| DQN | 0.000 ± 0.000 | — | 0.000 ± 0.000 | 0.000 ± 0.000 | 0.000 ± 0.000 |
+| PPO | 0.807 ± 0.307 | 0.000 ± 0.000 | 0.955 ± 0.000 | 0.577 ± 0.471 | 0.016 ± 0.036 |
+| QRDQN | — | — | 0.000 ± 0.000 | — | — |
 
 ## Individual Runs
 
@@ -33,6 +33,11 @@
 | A2C | empty_8x8 | 3 | 0.961 | 2704 |
 | A2C | empty_8x8 | 4 | 0.961 | 2777 |
 | A2C | empty_8x8 | 5 | 0.961 | 2630 |
+| A2C | four_rooms | 1 | 0.000 | 1053 |
+| A2C | four_rooms | 2 | 0.099 | 1056 |
+| A2C | four_rooms | 3 | 0.000 | 1051 |
+| A2C | four_rooms | 4 | 0.000 | 1089 |
+| A2C | four_rooms | 5 | 0.000 | 1033 |
 | DQN | doorkey_5x5 | 1 | 0.000 | 644 |
 | DQN | doorkey_5x5 | 2 | 0.000 | 600 |
 | DQN | doorkey_5x5 | 3 | 0.000 | 632 |
@@ -53,16 +58,26 @@
 | DQN | empty_8x8 | 3 | 0.000 | 1366 |
 | DQN | empty_8x8 | 4 | 0.000 | 1078 |
 | DQN | empty_8x8 | 5 | 0.000 | 275 |
+| DQN | four_rooms | 1 | 0.000 | 1034 |
+| DQN | four_rooms | 2 | 0.000 | 1012 |
+| DQN | four_rooms | 3 | 0.000 | 1030 |
+| DQN | four_rooms | 4 | 0.000 | 1014 |
+| DQN | four_rooms | 5 | 0.000 | 1037 |
 | PPO | doorkey_5x5 | 1 | 0.961 | 4225 |
 | PPO | doorkey_5x5 | 2 | 0.194 | 1396 |
 | PPO | doorkey_5x5 | 3 | 0.963 | 4414 |
 | PPO | doorkey_5x5 | 4 | 0.959 | 5117 |
 | PPO | doorkey_5x5 | 5 | 0.960 | 3929 |
+| PPO | doorkey_8x8 | 1 | 0.000 | 313 |
 | PPO | doorkey_8x8 | 1 | 0.000 | 80 |
+| PPO | doorkey_8x8 | 2 | 0.000 | 313 |
 | PPO | doorkey_8x8 | 2 | 0.000 | 80 |
+| PPO | doorkey_8x8 | 3 | 0.000 | 313 |
 | PPO | doorkey_8x8 | 3 | 0.000 | 80 |
+| PPO | doorkey_8x8 | 4 | 0.000 | 314 |
 | PPO | doorkey_8x8 | 4 | 0.000 | 80 |
 | PPO | doorkey_8x8 | 5 | 0.000 | 80 |
+| PPO | doorkey_8x8 | 5 | 0.000 | 313 |
 | PPO | empty_5x5 | 1 | 0.955 | 4626 |
 | PPO | empty_5x5 | 2 | 0.955 | 4055 |
 | PPO | empty_5x5 | 3 | 0.955 | 3570 |
@@ -73,6 +88,12 @@
 | PPO | empty_8x8 | 3 | 0.961 | 1192 |
 | PPO | empty_8x8 | 4 | 0.000 | 832 |
 | PPO | empty_8x8 | 5 | 0.961 | 1070 |
+| PPO | four_rooms | 1 | 0.000 | 1022 |
+| PPO | four_rooms | 1 | 0.000 | 1022 |
+| PPO | four_rooms | 2 | 0.000 | 1036 |
+| PPO | four_rooms | 3 | 0.000 | 1061 |
+| PPO | four_rooms | 4 | 0.097 | 1078 |
+| PPO | four_rooms | 5 | 0.000 | 1009 |
 | QRDQN | empty_5x5 | 1 | 0.000 | 500 |
 | QRDQN | empty_5x5 | 2 | 0.000 | 554 |
 | QRDQN | empty_5x5 | 3 | 0.000 | 500 |
