@@ -1,0 +1,74 @@
+[
+  {
+    "config": "baseline",
+    "ent_coef": 0.0,
+    "seed": 1,
+    "ds1": 0.0,
+    "ds2": 0.0,
+    "gap": 0.0
+  },
+  {
+    "config": "baseline",
+    "ent_coef": 0.0,
+    "seed": 2,
+    "ds1": 0.9392857142857144,
+    "ds2": 0.0,
+    "gap": 0.9392857142857144
+  },
+  {
+    "config": "baseline",
+    "ent_coef": 0.0,
+    "seed": 3,
+    "ds1": 0.9321428571428572,
+    "ds2": 0.0,
+    "gap": 0.9321428571428572
+  },
+  {
+    "config": "high_entropy",
+    "ent_coef": 0.1,
+    "seed": 1,
+    "ds1": 0.9392857142857144,
+    "ds2": 0.0,
+    "gap": 0.9392857142857144
+  },
+  {
+    "config": "high_entropy",
+    "ent_coef": 0.1,
+    "seed": 2,
+    "ds1": 0.9392857142857144,
+    "ds2": 0.0,
+    "gap": 0.9392857142857144
+  },
+  {
+    "config": "high_entropy",
+    "ent_coef": 0.1,
+    "seed": 3,
+    "ds1": 0.9392857142857144,
+    "ds2": 0.0,
+    "gap": 0.9392857142857144
+  },
+  {
+    "config": "very_high_entropy",
+    "ent_coef": 0.2,
+    "seed": 1,
+    "ds1": 0.9392857142857144,
+    "ds2": 0.0,
+    "gap": 0.9392857142857144
+  },
+  {
+    "config": "very_high_entropy",
+    "ent_coef": 0.2,
+    "seed": 2,
+    "ds1": 0.9464285714285714,
+    "ds2": 0.0,
+    "gap": 0.9464285714285714
+  },
+  {
+    "config": "very_high_entropy",
+    "ent_coef": 0.2,
+    "seed": 3,
+    "ds1": 0.0,
+    "ds2": 0.0,
+    "gap": 0.0
+  }
+]

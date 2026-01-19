@@ -38,10 +38,18 @@ Detailed markdown table:
     python run_experiment.py --summary
     → Saves to: plots/combined/summary_table.md
 
+GENERALIZATION EXPERIMENT
+-------------------------
+Test generalization by training on DistShift1 and evaluating on both:
+    python run_experiment.py --generalization
+    → Trains PPO, A2C, DQN on DistShift1 (100k steps, 5 seeds)
+    → Evaluates on DistShift1 (in-distribution) and DistShift2 (out-of-distribution)
+    → Saves to: results/generalization/{algo}/seed{N}_distshift.json
+
 AVAILABLE OPTIONS
 -----------------
-Algorithms: PPO, A2C, DQN
-Environments: empty_5x5, empty_8x8, doorkey_5x5, doorkey_8x8
+Algorithms: PPO, A2C, DQN, QRDQN
+Environments: empty_5x5, empty_8x8, doorkey_5x5, doorkey_8x8, distshift1, distshift2
 
 DIRECTORY STRUCTURE
 -------------------
@@ -837,6 +845,135 @@ def generate_summary_table():
 
 
 # ============================================================================
+# GENERALIZATION EXPERIMENT
+# ============================================================================
+
+def run_generalization_experiment(timesteps=100000, seeds=None):
+    """
+    Run generalization experiment: train on DistShift1, evaluate on both DistShift1 and DistShift2.
+    
+    This tests whether agents learn transferable policies or overfit to training layouts.
+    """
+    if seeds is None:
+        seeds = SEEDS
+    
+    print("="*60)
+    print("GENERALIZATION EXPERIMENT: DistShift")
+    print("Train on DistShift1, Test on DistShift1 & DistShift2")
+    print(f"Timesteps: {timesteps}, Seeds: {seeds}")
+    print("="*60)
+    
+    results_all = []
+    
+    for algo_name in ["PPO", "A2C", "DQN"]:
+        algo_class = ALGORITHMS[algo_name]
+        print(f"\n{'='*60}")
+        print(f"Algorithm: {algo_name}")
+        print(f"{'='*60}")
+        
+        for seed in seeds:
+            print(f"\n--- Seed {seed} ---")
+            
+            # Create training environment (DistShift1)
+            train_env = gym.make('MiniGrid-DistShift1-v0')
+            train_env = ImgObsWrapper(train_env)
+            train_env = Monitor(train_env)
+            
+            # Train
+            model = algo_class('MlpPolicy', train_env, verbose=0, seed=seed)
+            callback = MetricsCallback()
+            model.learn(total_timesteps=timesteps, callback=callback)
+            
+            # Evaluate on BOTH environments
+            def evaluate_on_env(model, env_name, n_episodes=10):
+                eval_env = gym.make(env_name)
+                eval_env = ImgObsWrapper(eval_env)
+                rewards = []
+                for _ in range(n_episodes):
+                    obs, _ = eval_env.reset()
+                    total_reward = 0
+                    done = False
+                    while not done:
+                        action, _ = model.predict(obs, deterministic=True)
+                        obs, reward, terminated, truncated, _ = eval_env.step(action)
+                        total_reward += reward
+                        done = terminated or truncated
+                    rewards.append(total_reward)
+                eval_env.close()
+                return np.mean(rewards), np.std(rewards), rewards
+            
+            ds1_mean, ds1_std, ds1_rewards = evaluate_on_env(model, 'MiniGrid-DistShift1-v0')
+            ds2_mean, ds2_std, ds2_rewards = evaluate_on_env(model, 'MiniGrid-DistShift2-v0')
+            
+            gen_gap = ds1_mean - ds2_mean
+            
+            print(f"  DistShift1 (train): {ds1_mean:.3f} ± {ds1_std:.3f}")
+            print(f"  DistShift2 (test):  {ds2_mean:.3f} ± {ds2_std:.3f}")
+            print(f"  Generalization gap: {gen_gap:.3f}")
+            
+            result = {
+                "algo": algo_name,
+                "seed": seed,
+                "timesteps": timesteps,
+                "distshift1_mean": float(ds1_mean),
+                "distshift1_std": float(ds1_std),
+                "distshift2_mean": float(ds2_mean),
+                "distshift2_std": float(ds2_std),
+                "generalization_gap": float(gen_gap),
+                "distshift1_rewards": [float(r) for r in ds1_rewards],
+                "distshift2_rewards": [float(r) for r in ds2_rewards],
+                "training_rewards": callback.episode_rewards,
+                "training_timesteps": callback.timesteps,
+            }
+            results_all.append(result)
+            
+            # Save individual result
+            save_dir = f"results/generalization/{algo_name}"
+            os.makedirs(save_dir, exist_ok=True)
+            filepath = f"{save_dir}/seed{seed}_distshift.json"
+            with open(filepath, "w") as f:
+                json.dump(result, f, indent=2)
+            print(f"  Saved: {filepath}")
+            
+            train_env.close()
+    
+    # Print summary
+    print("\n" + "="*60)
+    print("SUMMARY")
+    print("="*60)
+    print("\n| Algorithm | DistShift1 (train) | DistShift2 (test) | Gap |")
+    print("|-----------|--------------------|--------------------|-----|")
+    
+    for algo in ["PPO", "A2C", "DQN"]:
+        algo_results = [r for r in results_all if r['algo'] == algo]
+        if algo_results:
+            ds1_mean = np.mean([r['distshift1_mean'] for r in algo_results])
+            ds2_mean = np.mean([r['distshift2_mean'] for r in algo_results])
+            gap_mean = np.mean([r['generalization_gap'] for r in algo_results])
+            print(f"| {algo} | {ds1_mean:.3f} | {ds2_mean:.3f} | {gap_mean:.3f} |")
+    
+    # Save summary table
+    summary_path = "results/generalization/summary_table.md"
+    with open(summary_path, "w") as f:
+        f.write("# Generalization Experiment Results\n\n")
+        f.write("Train on DistShift1, evaluate on DistShift1 (in-distribution) and DistShift2 (out-of-distribution).\n\n")
+        f.write(f"Timesteps: {timesteps}, Seeds: {len(seeds)}\n\n")
+        f.write("| Algorithm | DistShift1 (train) | DistShift2 (test) | Generalization Gap |\n")
+        f.write("|-----------|--------------------|--------------------|--------------------|\n")
+        for algo in ["PPO", "A2C", "DQN"]:
+            algo_results = [r for r in results_all if r['algo'] == algo]
+            if algo_results:
+                ds1_mean = np.mean([r['distshift1_mean'] for r in algo_results])
+                ds1_std = np.std([r['distshift1_mean'] for r in algo_results])
+                ds2_mean = np.mean([r['distshift2_mean'] for r in algo_results])
+                gap_mean = np.mean([r['generalization_gap'] for r in algo_results])
+                f.write(f"| {algo} | {ds1_mean:.2f} ± {ds1_std:.2f} | {ds2_mean:.2f} | {gap_mean:.2f} |\n")
+    print(f"\nSaved: {summary_path}")
+    
+    return results_all
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -866,6 +1003,8 @@ if __name__ == "__main__":
                         help="Add count-based exploration bonus to rewards")
     parser.add_argument("--bonus-scale", type=float, default=0.1,
                         help="Scale of exploration bonus (default: 0.1)")
+    parser.add_argument("--generalization", action="store_true",
+                        help="Run generalization experiment (train DistShift1, test both)")
     
     args = parser.parse_args()
     
@@ -879,6 +1018,9 @@ if __name__ == "__main__":
         plot_combined_figure()
     elif args.summary:
         generate_summary_table()
+    elif args.generalization:
+        timesteps = args.timesteps if args.timesteps else 100000
+        run_generalization_experiment(timesteps=timesteps)
     elif args.all:
         run_all_experiments()
     elif args.algo and args.env:
