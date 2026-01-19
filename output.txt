@@ -1,0 +1,250 @@
+1. big lake p_i vs v_i
+# Model-based algorithms
+
+## Policy iteration
+Lake:
+[['&' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '#' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '#' '#' '.' '.' '.' '#' '.']
+ ['.' '#' '.' '.' '#' '.' '#' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '$']]
+Policy:
+[['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '_' '_' '^' '>' '>' '>' '_']
+ ['>' '>' '>' '>' '_' '^' '>' '_']
+ ['^' '^' '^' '^' '>' '>' '>' '_']
+ ['^' '^' '^' '>' '>' '_' '^' '_']
+ ['_' '^' '>' '^' '^' '_' '^' '_']
+ ['>' '>' '^' '^' '>' '>' '>' '^']]
+Value:
+[[0.189 0.212 0.237 0.266 0.298 0.334 0.374 0.418]
+ [0.203 0.227 0.256 0.288 0.332 0.373 0.419 0.469]
+ [0.203 0.227 0.25  0.    0.356 0.408 0.47  0.529]
+ [0.226 0.255 0.288 0.325 0.383 0.    0.519 0.595]
+ [0.202 0.222 0.244 0.    0.441 0.507 0.581 0.671]
+ [0.176 0.    0.    0.417 0.491 0.567 0.    0.756]
+ [0.176 0.    0.301 0.354 0.    0.654 0.    0.869]
+ [0.202 0.227 0.261 0.    0.656 0.771 0.869 1.   ]]
+Iterations: 6
+
+## Value iteration
+Lake:
+[['&' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '#' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '#' '#' '.' '.' '.' '#' '.']
+ ['.' '#' '.' '.' '#' '.' '#' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '$']]
+Policy:
+[['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '_' '_' '^' '>' '>' '>' '_']
+ ['>' '>' '>' '>' '_' '^' '>' '_']
+ ['^' '^' '^' '^' '>' '>' '>' '_']
+ ['^' '^' '^' '>' '>' '_' '^' '_']
+ ['_' '^' '>' '^' '^' '_' '^' '_']
+ ['>' '>' '^' '^' '>' '>' '>' '^']]
+Value:
+[[0.189 0.212 0.237 0.266 0.298 0.334 0.374 0.418]
+ [0.203 0.227 0.256 0.288 0.332 0.373 0.419 0.469]
+ [0.203 0.227 0.25  0.    0.356 0.408 0.47  0.529]
+ [0.226 0.255 0.288 0.325 0.383 0.    0.519 0.595]
+ [0.202 0.222 0.244 0.    0.441 0.507 0.581 0.671]
+ [0.176 0.    0.    0.417 0.491 0.567 0.    0.756]
+ [0.176 0.    0.301 0.354 0.    0.654 0.    0.869]
+ [0.202 0.227 0.261 0.    0.656 0.771 0.869 1.   ]]
+Iterations: 20
+
+
+2. small lake model free
+# Model-free algorithms
+
+--- Total Discounted Returns (Sum over all episodes) ---
+Sarsa: 1003.42
+Q-Learning: 992.58
+Linear Sarsa: 1022.72
+Linear Q-Learning: 968.87
+Deep Q-Network: 1339.49
+------------------------------------------------------
+
+Plotting results...
+Plot for Question 2 saved to '1_7_q2_plot.png'
+
+--- Question 3: Hyperparameter Tuning ---
+
+--- Part 1: Small Frozen Lake ---
+Optimal policy for small lake found via Policy Iteration:
+Lake:
+[['&' '.' '.' '.']
+ ['.' '#' '.' '#']
+ ['.' '.' '.' '#']
+ ['#' '.' '.' '$']]
+Policy:
+[['_' '>' '_' '<']
+ ['_' '^' '_' '^']
+ ['>' '_' '_' '^']
+ ['^' '>' '>' '^']]
+Value:
+[[0.455 0.504 0.579 0.505]
+ [0.508 0.    0.653 0.   ]
+ [0.584 0.672 0.768 0.   ]
+ [0.    0.771 0.887 1.   ]]
+
+--- Tuning Sarsa ---
+  Sarsa with eta=0.1, epsilon=0.1: ~10000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.3: ~10000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.5: ~7515 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.7: ~4479 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.9: ~6904 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.1: ~10000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.3: ~7205 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.5: ~10000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.7: ~7365 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.9: ~10000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.1: ~10000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.3: ~3278 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.5: ~6423 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.7: ~4870 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.9: ~5072 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.1: ~5421 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.3: ~5041 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.5: ~5735 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.7: ~7047 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.9: ~10000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.1: ~3718 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.3: ~4943 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.5: ~6692 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.7: ~6364 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.9: ~6956 episodes to converge.
+
+Best result for Sarsa:
+  - Minimized episodes: ~3278
+  - Best eta: 0.5
+  - Best epsilon: 0.3
+
+--- Tuning Q-learning ---
+  Q-learning with eta=0.1, epsilon=0.1: ~10000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.3: ~10000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.5: ~7485 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.7: ~4223 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.9: ~10000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.1: ~8180 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.3: ~7163 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.5: ~7038 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.7: ~10000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.9: ~10000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.1: ~10000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.3: ~2969 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.5: ~2200 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.7: ~2823 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.9: ~3320 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.1: ~10000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.3: ~4749 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.5: ~4122 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.7: ~1996 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.9: ~5099 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.1: ~5578 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.3: ~5651 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.5: ~4172 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.7: ~3891 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.9: ~1479 episodes to converge.
+
+Best result for Q-learning:
+  - Minimized episodes: ~1479
+  - Best eta: 0.9
+  - Best epsilon: 0.9
+
+
+--- Part 2: Big Frozen Lake ---
+Optimal policy for big lake found via Policy Iteration:
+Lake:
+[['&' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '.' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '.' '.' '.' '.' '#' '.' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '.']
+ ['.' '#' '#' '.' '.' '.' '#' '.']
+ ['.' '#' '.' '.' '#' '.' '#' '.']
+ ['.' '.' '.' '#' '.' '.' '.' '$']]
+Policy:
+[['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '>' '>' '>' '>' '>' '_' '_']
+ ['>' '_' '_' '^' '>' '>' '>' '_']
+ ['>' '>' '>' '>' '_' '^' '>' '_']
+ ['^' '^' '^' '^' '>' '>' '>' '_']
+ ['^' '^' '^' '>' '>' '_' '^' '_']
+ ['_' '^' '>' '^' '^' '_' '^' '_']
+ ['>' '>' '^' '^' '>' '>' '>' '^']]
+Value:
+[[0.189 0.212 0.237 0.266 0.298 0.334 0.374 0.418]
+ [0.203 0.227 0.256 0.288 0.332 0.373 0.419 0.469]
+ [0.203 0.227 0.25  0.    0.356 0.408 0.47  0.529]
+ [0.226 0.255 0.288 0.325 0.383 0.    0.519 0.595]
+ [0.202 0.222 0.244 0.    0.441 0.507 0.581 0.671]
+ [0.176 0.    0.    0.417 0.491 0.567 0.    0.756]
+ [0.176 0.    0.301 0.354 0.    0.654 0.    0.869]
+ [0.202 0.227 0.261 0.    0.656 0.771 0.869 1.   ]]
+
+--- Tuning Sarsa ---
+  Sarsa with eta=0.1, epsilon=0.1: ~20000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.3: ~20000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.5: ~20000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.7: ~20000 episodes to converge.
+  Sarsa with eta=0.1, epsilon=0.9: ~20000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.1: ~20000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.3: ~20000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.5: ~20000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.7: ~20000 episodes to converge.
+  Sarsa with eta=0.3, epsilon=0.9: ~20000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.1: ~20000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.3: ~20000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.5: ~20000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.7: ~20000 episodes to converge.
+  Sarsa with eta=0.5, epsilon=0.9: ~20000 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.1: ~20000 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.3: ~20000 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.5: ~20000 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.7: ~20000 episodes to converge.
+  Sarsa with eta=0.7, epsilon=0.9: ~20000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.1: ~20000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.3: ~20000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.5: ~20000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.7: ~20000 episodes to converge.
+  Sarsa with eta=0.9, epsilon=0.9: ~20000 episodes to converge.
+
+Best result for Sarsa: Did not converge within 20000 episodes.
+
+--- Tuning Q-learning ---
+  Q-learning with eta=0.1, epsilon=0.1: ~20000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.3: ~20000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.5: ~20000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.7: ~20000 episodes to converge.
+  Q-learning with eta=0.1, epsilon=0.9: ~20000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.1: ~20000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.3: ~20000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.5: ~20000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.7: ~20000 episodes to converge.
+  Q-learning with eta=0.3, epsilon=0.9: ~20000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.1: ~20000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.3: ~20000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.5: ~20000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.7: ~20000 episodes to converge.
+  Q-learning with eta=0.5, epsilon=0.9: ~20000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.1: ~20000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.3: ~20000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.5: ~20000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.7: ~20000 episodes to converge.
+  Q-learning with eta=0.7, epsilon=0.9: ~20000 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.1: ~20000 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.3: ~20000 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.5: ~20000 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.7: ~20000 episodes to converge.
+  Q-learning with eta=0.9, epsilon=0.9: ~20000 episodes to converge.
+
+Best result for Q-learning: Did not converge within 20000 episodes.
