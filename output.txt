@@ -61,9 +61,7 @@ Value:
  [0.202 0.227 0.261 0.    0.656 0.771 0.869 1.   ]]
 Iterations: 20
 
-
-2. small lake model free
-# Model-free algorithms
+2. small lake model-free algo returns experiment
 
 --- Total Discounted Returns (Sum over all episodes) ---
 Sarsa: 1003.42
@@ -74,7 +72,7 @@ Deep Q-Network: 1339.49
 ------------------------------------------------------
 
 Plotting results...
-Plot for Question 2 saved to '1_7_q2_plot.png'
+plot for Question 2 saved to '1_7_q2_plot_subplots.png'
 
 --- Question 3: Hyperparameter Tuning ---
 

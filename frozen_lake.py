@@ -1,6 +1,8 @@
 from collections import deque
 import numpy as np
 import contextlib
+import sys
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -293,7 +295,9 @@ def policy_iteration(env, gamma, theta, max_iterations, policy=None):
 
     value = np.zeros(env.n_states, dtype=float)
 
+    iterations = 0
     for i in range(max_iterations):
+        iterations = i + 1
         value = policy_evaluation(env, policy, gamma, theta, max_iterations)
         new_policy = policy_improvement(env, value, gamma)
 
@@ -302,7 +306,7 @@ def policy_iteration(env, gamma, theta, max_iterations, policy=None):
 
         policy = new_policy
 
-    return policy, value
+    return policy, value, iterations
 
 
 def value_iteration(env, gamma, theta, max_iterations, value=None):
@@ -311,8 +315,10 @@ def value_iteration(env, gamma, theta, max_iterations, value=None):
     else:
         value = np.array(value, dtype=float)
 
+    iterations = 0
     for i in range(max_iterations):
         delta = 0
+        iterations = i + 1
 
         for s in range(env.n_states):
             v = value[s]
@@ -331,7 +337,7 @@ def value_iteration(env, gamma, theta, max_iterations, value=None):
             break
 
     policy = policy_improvement(env, value, gamma)
-    return policy, value
+    return policy, value, iterations
 
 
 def select_greedy_action(q_row, epsilon, random_state):
@@ -353,14 +359,22 @@ def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
 
     q = np.zeros((env.n_states, env.n_actions))
 
+    episode_returns = np.zeros(max_episodes)
+
     for i in range(max_episodes):
         s = env.reset()
         done = False
+
+        episode_return = 0.0
+        t = 0
 
         a = select_greedy_action(q[s], epsilon[i], random_state)
 
         while not done:
             ns, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
 
             if done:
                 q[s, a] += eta[i] * (r - q[s, a])
@@ -372,10 +386,12 @@ def sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
             s = ns
             a = na
 
+        episode_returns[i] = episode_return
+
     policy = q.argmax(axis=1)
     value = q.max(axis=1)
 
-    return policy, value
+    return policy, value, episode_returns
 
 
 def q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
@@ -386,20 +402,31 @@ def q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
 
     q = np.zeros((env.n_states, env.n_actions))
 
+    episode_returns = np.zeros(max_episodes)
+
     for i in range(max_episodes):
         s = env.reset()
         done = False
 
+        episode_return = 0.0
+        t = 0
+
         while not done:
             a = select_greedy_action(q[s], epsilon[i], random_state)
             ns, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
             q[s, a] = q[s, a] + eta[i] * (r + gamma * np.max(q[ns]) - q[s, a])
             s = ns
+
+        episode_returns[i] = episode_return
 
     policy = q.argmax(axis=1)
     value = q.max(axis=1)
 
-    return policy, value
+    return policy, value, episode_returns
 
 
 class LinearWrapper:
@@ -451,6 +478,8 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
 
     theta = np.zeros(env.n_features)
 
+    episode_returns = np.zeros(max_episodes)
+
     for i in range(max_episodes):
         features = env.reset()
         q = features.dot(theta)
@@ -458,8 +487,15 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
         a = select_greedy_action(q, epsilon[i], random_state)
         done = False
 
+        episode_return = 0.0
+        t = 0
+
         while not done:
             ns_features, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
             ns_q = ns_features.dot(theta)
 
             if done:
@@ -475,7 +511,9 @@ def linear_sarsa(env, max_episodes, eta, gamma, epsilon, seed=None):
             q = ns_q
             a = a_next
 
-    return theta
+        episode_returns[i] = episode_return
+
+    return theta, episode_returns
 
 
 def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
@@ -486,15 +524,24 @@ def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
 
     theta = np.zeros(env.n_features)
 
+    episode_returns = np.zeros(max_episodes)
+
     for i in range(max_episodes):
         features = env.reset()
         done = False
+
+        episode_return = 0.0
+        t = 0
 
         while not done:
             q = features.dot(theta)
             a = select_greedy_action(q, epsilon[i], random_state)
 
             ns_features, r, done = env.step(a)
+
+            episode_return += (gamma**t) * r
+            t += 1
+
             ns_q = ns_features.dot(theta)
 
             if done:
@@ -506,7 +553,9 @@ def linear_q_learning(env, max_episodes, eta, gamma, epsilon, seed=None):
             theta = theta + eta[i] * delta * features[a]
             features = ns_features
 
-    return theta
+        episode_returns[i] = episode_return
+
+    return theta, episode_returns
 
 
 class FrozenLakeImageWrapper:
@@ -913,36 +962,41 @@ def question_2(lake=s_lake):
 
     print("Plotting results...")
 
-    # --- Plotting ---
+    # --- Plotting ---    
     window = 20
-    
+
     sarsa_ma = np.convolve(sarsa_returns, np.ones(window)/window, mode='valid')
     q_learning_ma = np.convolve(q_learning_returns, np.ones(window)/window, mode='valid')
     linear_sarsa_ma = np.convolve(linear_sarsa_returns, np.ones(window)/window, mode='valid')
     linear_q_learning_ma = np.convolve(linear_q_learning_returns, np.ones(window)/window, mode='valid')
     dqn_ma = np.convolve(dqn_returns, np.ones(window) / window, mode="valid")
-    
-    # The x-axis for the moving average starts after the first window
     x_axis = np.arange(window - 1, max_episodes)
-    
-    plt.figure(figsize=(12, 8))
-    
-    plt.plot(x_axis, sarsa_ma, label='Sarsa')
-    plt.plot(x_axis, q_learning_ma, label='Q-Learning')
-    plt.plot(x_axis, linear_sarsa_ma, label='Linear Sarsa')
-    plt.plot(x_axis, linear_q_learning_ma, label='Linear Q-Learning')
-    plt.plot(x_axis, dqn_ma, label="Deep Q-Network")
-    
-    plt.xlabel('Episode Number')
-    plt.ylabel(f'Discounted Return (Moving Average over {window} episodes)')
-    plt.title('Comparison of Model-Free Algorithms on Small Frozen Lake')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plot_filename = "1_7_q2_plot.png"
+
+    # Create a figure with 5 subplots, sharing the x-axis for easy comparison.
+    fig, axs = plt.subplots(5, 1, figsize=(15, 20), sharex=True, constrained_layout=True)
+    fig.suptitle('Comparison of Model-Free Algorithms on Small Frozen Lake', fontsize=16)
+
+    plot_data = {
+        'Sarsa': (sarsa_ma, 'C0'),
+        'Q-Learning': (q_learning_ma, 'C1'),
+        'Linear Sarsa': (linear_sarsa_ma, 'C2'),
+        'Linear Q-Learning': (linear_q_learning_ma, 'C3'),
+        'Deep Q-Network': (dqn_ma, 'C4')
+    }
+
+    for i, (label, (ma_data, color)) in enumerate(plot_data.items()):
+        axs[i].plot(x_axis, ma_data, label=label, color=color)
+        axs[i].set_title(label)
+        axs[i].set_ylabel(f'Discounted Return\n(Moving Avg over {window} episodes)')
+        axs[i].grid(True)
+        axs[i].set_ylim(-0.05, 0.6) # Common y-axis for fair comparison
+
+    axs[-1].set_xlabel('Episode Number')
+
+    plot_filename = "1_7_q2_plot_subplots.png"
     plt.savefig(plot_filename)
-    plt.close()  # Free up memory
-    print(f"Plot for Question 2 saved to '{plot_filename}'")
+    plt.close()  # Free up memory    
+    print(f"plot for Question 2 saved to '{plot_filename}'")
 
 
 # ================================================================
@@ -1155,7 +1209,7 @@ if __name__ == "__main__":
     # We will write the output for Q1, Q2, Q3 to both the console and a file.
     output_filename = "output.txt"
     print(f"Running questions 1, 2, and 3. Output will be printed to console and saved to '{output_filename}'...")
-    print("Note: The plot for Question 2 will be displayed in a separate window. Please save it manually if needed.")
+    print("Note: The plot for Question 2 is saved to a file and will not be displayed interactively.")
 
     original_stdout = sys.stdout  # Save a reference to the original standard output
 
