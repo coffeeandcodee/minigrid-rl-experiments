@@ -1,0 +1,5 @@
+# TensorBoard log directory
+runs/
+
+# Test results
+results/

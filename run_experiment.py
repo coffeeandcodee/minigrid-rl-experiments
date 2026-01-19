@@ -78,7 +78,6 @@ python run_experiment.py --table
 """
 
 import gymnasium as gym
-import minigrid
 from minigrid.wrappers import ImgObsWrapper
 from stable_baselines3 import PPO, A2C, DQN
 from stable_baselines3.common.monitor import Monitor
@@ -89,6 +88,9 @@ import matplotlib.pyplot as plt
 import os
 import json
 import argparse
+import torch
+import torch.nn as nn
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from datetime import datetime
 
 
@@ -154,6 +156,7 @@ ALGORITHMS = {
 ENVIRONMENTS = {
     "empty_5x5": "MiniGrid-Empty-5x5-v0",
     "empty_8x8": "MiniGrid-Empty-8x8-v0",
+    "empty_16x16": "MiniGrid-Empty-16x16-v0",
     "doorkey_5x5": "MiniGrid-DoorKey-5x5-v0",
     "doorkey_8x8": "MiniGrid-DoorKey-8x8-v0",
     "four_rooms": "MiniGrid-FourRooms-v0",
@@ -161,23 +164,57 @@ ENVIRONMENTS = {
     "distshift2": "MiniGrid-DistShift2-v0",
 }
 
-SEEDS = [1, 2, 3, 4, 5] 
+SEEDS = [1, 2, 3, 4, 5]
 TOTAL_TIMESTEPS = 50_000
 RESULTS_DIR = "results"
+
+
+# ============================================================================
+# CUSTOM CNN FOR MINIGRID
+# ============================================================================
+class MiniGridCNN(BaseFeaturesExtractor):
+    def __init__(
+        self, observation_space: gym.spaces.Box, features_dim: int = 512
+    ) -> None:
+        super().__init__(observation_space, features_dim)
+        n_input_channels = observation_space.shape[2]  # (H, W, C)
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 16, kernel_size=2, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=2, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=2, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        # Compute shape
+        with torch.no_grad():
+            sample = torch.as_tensor(observation_space.sample()[None]).float() / 255.0
+            sample = sample.permute(0, 3, 1, 2)  # (batch, C, H, W)
+            n_flatten = self.cnn(sample).shape[1]
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        observations = observations.float() / 255.0
+        observations = observations.permute(0, 3, 1, 2)
+        return self.linear(self.cnn(observations))
+
 
 # ============================================================================
 # CALLBACK - Records metrics during training
 # ============================================================================
 
+
 class MetricsCallback(BaseCallback):
     """Records episode rewards and lengths during training."""
-    
+
     def __init__(self, verbose=0):
         super().__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
         self.timesteps = []
-        
+        self._last_num_episodes = 0
+
     def _on_step(self) -> bool:
         # Check infos for episode completion (works even when buffer is full)
         infos = self.locals.get("infos", [])
@@ -187,6 +224,7 @@ class MetricsCallback(BaseCallback):
                 self.episode_lengths.append(info["episode"]["l"])
                 self.timesteps.append(self.num_timesteps)
         return True
+
 
 # ============================================================================
 # EXPERIMENT FUNCTIONS
@@ -200,7 +238,7 @@ def make_env(env_name, exploration_bonus=False, bonus_scale=0.1):
         exploration_bonus: If True, add count-based exploration reward
         bonus_scale: Scale of intrinsic reward (default: 0.1)
     """
-    env = gym.make(env_name)
+    env = gym.make(env_name, render_mode="rgb_array")
     env = ImgObsWrapper(env)
     if exploration_bonus:
         env = ExplorationBonusWrapper(env, bonus_scale=bonus_scale)
@@ -219,13 +257,28 @@ def run_single_experiment(algo_name, env_key, seed, timesteps=None, exploration_
     print(f"{'='*60}")
     
     # Setup
+    algo_class = ALGORITHMS[algo_name]
     env_name = ENVIRONMENTS[env_key]
     env = make_env(env_name, exploration_bonus=exploration_bonus, bonus_scale=bonus_scale)
-    algo_class = ALGORITHMS[algo_name]
     
     # Create model
-    model = algo_class("MlpPolicy", env, verbose=0, seed=seed)
-    
+    model = algo_class(
+        "MlpPolicy",
+        env,
+        verbose=0,
+        seed=seed,
+        device="auto",
+    )
+    # model = algo_class(
+    #     "CnnPolicy",
+    #     env,
+    #     verbose=0,
+    #     seed=seed,
+    #     device="cuda",
+    #     policy_kwargs={"features_extractor_class": MiniGridCNN},
+    #     tensorboard_log=log_dir,
+    # )
+
     # Train with callback
     callback = MetricsCallback()
     model.learn(total_timesteps=timesteps, callback=callback)
@@ -236,15 +289,16 @@ def run_single_experiment(algo_name, env_key, seed, timesteps=None, exploration_
         obs, _ = env.reset()
         total_reward = 0
         done = False
+
         while not done:
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, _ = env.step(action)
             total_reward += reward
             done = terminated or truncated
         eval_rewards.append(total_reward)
-    
+
     env.close()
-    
+
     results = {
         "algo": algo_name,
         "env": env_key,
@@ -257,9 +311,11 @@ def run_single_experiment(algo_name, env_key, seed, timesteps=None, exploration_
         "exploration_bonus": exploration_bonus,
         "bonus_scale": bonus_scale if exploration_bonus else None,
     }
-    
-    print(f"Final eval: {results['final_eval_mean']:.3f} ± {results['final_eval_std']:.3f}")
-    
+
+    print(
+        f"Final eval: {results['final_eval_mean']:.3f} ± {results['final_eval_std']:.3f}"
+    )
+
     return results
 
 
@@ -309,33 +365,34 @@ def run_all_experiments():
 # TABLES
 # ============================================================================
 
+
 def print_table():
     """Print a formatted table of all results."""
     all_results = load_all_results()
-    
+
     if not all_results:
         print("No results found in results/ directory")
         return
-    
+
     # Get unique algos and envs
     algos = sorted(set(r["algo"] for r in all_results))
     envs = sorted(set(r["env"] for r in all_results))
-    
+
     # Header
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("RESULTS SUMMARY")
-    print("="*80)
-    
+    print("=" * 80)
+
     # Table 1: Mean ± Std by Algorithm and Environment
     print("\n### Final Evaluation Reward (mean ± std across seeds)\n")
-    
+
     col_width = 18
-    
+
     # Header row
     header = "Algorithm".ljust(12) + "".join(e.ljust(col_width) for e in envs)
     print(header)
     print("-" * len(header))
-    
+
     # Data rows
     for algo in algos:
         row = algo.ljust(12)
@@ -348,18 +405,22 @@ def print_table():
             else:
                 row += "-".ljust(col_width)
         print(row)
-    
+
     # Table 2: Individual runs
     print("\n\n### All Individual Runs\n")
-    print(f"{'Algorithm':<10} {'Environment':<15} {'Seed':<6} {'Reward':<10} {'Episodes':<10}")
+    print(
+        f"{'Algorithm':<10} {'Environment':<15} {'Seed':<6} {'Reward':<10} {'Episodes':<10}"
+    )
     print("-" * 55)
-    
+
     for r in sorted(all_results, key=lambda x: (x["algo"], x["env"], x["seed"])):
         n_episodes = len(r.get("episode_rewards", []))
-        print(f"{r['algo']:<10} {r['env']:<15} {r['seed']:<6} {r['final_eval_mean']:<10.3f} {n_episodes:<10}")
-    
-    print("\n" + "="*80)
-    
+        print(
+            f"{r['algo']:<10} {r['env']:<15} {r['seed']:<6} {r['final_eval_mean']:<10.3f} {n_episodes:<10}"
+        )
+
+    print("\n" + "=" * 80)
+
     # Also save as markdown
     save_table_markdown(all_results, algos, envs)
 
@@ -367,15 +428,15 @@ def print_table():
 def save_table_markdown(all_results, algos, envs):
     """Save results as a markdown table."""
     os.makedirs("results", exist_ok=True)
-    
+
     with open("results/summary_table.md", "w") as f:
         f.write("# Experiment Results Summary\n\n")
-        
+
         # Main comparison table
         f.write("## Final Evaluation Reward\n\n")
         f.write("| Algorithm | " + " | ".join(envs) + " |\n")
         f.write("|" + "---|" * (len(envs) + 1) + "\n")
-        
+
         for algo in algos:
             row = f"| {algo} |"
             for env in envs:
@@ -387,15 +448,17 @@ def save_table_markdown(all_results, algos, envs):
                 else:
                     row += " - |"
             f.write(row + "\n")
-        
+
         f.write("\n## Individual Runs\n\n")
         f.write("| Algorithm | Environment | Seed | Reward | Episodes |\n")
         f.write("|---|---|---|---|---|\n")
-        
+
         for r in sorted(all_results, key=lambda x: (x["algo"], x["env"], x["seed"])):
             n_episodes = len(r.get("episode_rewards", []))
-            f.write(f"| {r['algo']} | {r['env']} | {r['seed']} | {r['final_eval_mean']:.3f} | {n_episodes} |\n")
-    
+            f.write(
+                f"| {r['algo']} | {r['env']} | {r['seed']} | {r['final_eval_mean']:.3f} | {n_episodes} |\n"
+            )
+
     print("Saved: results/summary_table.md")
 
 
@@ -561,18 +624,19 @@ def plot_learning_curves():
         plt.close()
 
 
+
 def plot_results():
     """Generate comparison plots from saved results."""
     all_results = load_all_results()
-    
+
     if not all_results:
         print("No results found in results/ directory")
         return
-    
+
     # Group by environment
     envs = set(r["env"] for r in all_results)
     algos = set(r["algo"] for r in all_results)
-    
+
     os.makedirs("plots", exist_ok=True)
     
     # Sophisticated color palette
@@ -605,8 +669,10 @@ def plot_results():
         
         for algo_name in algos:
             # Get all runs for this algo/env
-            runs = [r for r in all_results if r["algo"] == algo_name and r["env"] == env_key]
-            
+            runs = [
+                r for r in all_results if r["algo"] == algo_name and r["env"] == env_key
+            ]
+
             if not runs:
                 continue
             
@@ -621,7 +687,9 @@ def plot_results():
         colors = []
         
         for algo_name in algo_names:
-            runs = [r for r in all_results if r["algo"] == algo_name and r["env"] == env_key]
+            runs = [
+                r for r in all_results if r["algo"] == algo_name and r["env"] == env_key
+            ]
             if runs:
                 vals = [r["final_eval_mean"] for r in runs]
                 means.append(np.mean(vals))
@@ -1007,7 +1075,7 @@ if __name__ == "__main__":
                         help="Run generalization experiment (train DistShift1, test both)")
     
     args = parser.parse_args()
-    
+
     if args.table:
         print_table()
     elif args.curves:
