@@ -1,4 +1,4 @@
-# Deep Reinforcement Learning Experiments
+# Frozen lake tasks & Deep Reinforcement Learning Experiments
 
 Experimental investigation of key challenges in deep reinforcement learning using MiniGrid environments and Stable Baselines 3.
 
@@ -13,9 +13,15 @@ Experimental investigation of key challenges in deep reinforcement learning usin
 ## Installation
 
 ```bash
+# Clone and install dependencies
 git clone <repo-url>
-cd DRL_v2
-pip install gymnasium minigrid stable-baselines3 sb3-contrib matplotlib numpy
+cd minigrid-rl-experiments
+pip install -r requirements.txt
+```
+
+Alternatively, install manually:
+```bash
+pip install gymnasium minigrid stable-baselines3 sb3-contrib matplotlib numpy torch
 ```
 
 ## Reproducing Experiments
@@ -61,8 +67,12 @@ python3 run_experiment.py --summary
 ## Project Structure
 
 ```
-DRL_v2/
-├── run_experiment.py      # Main experiment runner
+minigrid-rl-experiments/
+├── requirements.txt       # Python dependencies
+├── frozen_lake.py         # Part 1: Frozen Lake environment implementation
+├── part_1.py              # Part 1: RL algorithms (PI, VI, Sarsa, Q-learning, DQN)
+├── output.txt             # Part 1: Main function output
+├── run_experiment.py      # Part 2: MiniGrid experiment runner
 ├── results/               # JSON files with experiment data
 │   ├── empty_5x5/
 │   ├── doorkey_5x5/
@@ -73,7 +83,7 @@ DRL_v2/
 │   ├── doorkey_5x5/
 │   ├── doorkey_8x8/
 │   └── combined/
-└── resources/             # Reference materials
+└── resources/             # Reference materials (p.npy, assignment.pdf)
 ```
 
 ## Algorithms
