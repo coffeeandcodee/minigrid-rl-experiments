@@ -1,96 +1,100 @@
-# MiniGrid RL Experiments
+# Deep Reinforcement Learning Experiments
 
-Assignment Part 2: Beyond the Frozen Lake
+Experimental investigation of key challenges in deep reinforcement learning using MiniGrid environments and Stable Baselines 3.
 
-Here's some ideas as to what algorithms and experiments we can look into testing in the days to come. 
+## Challenges Investigated
 
-A lot of the algorithms are available in Stables Baselines 3 (the library mentioned in the assignment.pdf).
+| Challenge | Environment | Key Finding |
+|-----------|-------------|-------------|
+| **Training Instability** | Empty-5x5, Empty-8x8 | DQN learns then catastrophically collapses; policy gradient methods (PPO, A2C) remain stable |
+| **Sparse Rewards** | DoorKey-5x5, DoorKey-8x8 | Multi-step prerequisites dramatically reduce sample efficiency; reward shaping enables learning |
+| **Generalization** | DistShift1, DistShift2 | Policies memorize fixed action sequences rather than learning reactive behavior |
 
-**Also, have a look at the "2017 Challenges in Deep RL.pdf", and scroll down to "Current Research and challanges" on page 10. Let's try to address some of these**
-
----
-
-## Setup
+## Installation
 
 ```bash
-pip install gymnasium minigrid stable-baselines3 sb3-contrib numpy torch matplotlib
+git clone <repo-url>
+cd DRL_v2
+pip install gymnasium minigrid stable-baselines3 sb3-contrib matplotlib numpy
 ```
 
----
+## Reproducing Experiments
 
-## Algorithms We Can Use
+### Basic Usage
 
-All available in **Stable Baselines 3** (no custom implementation needed):
+```bash
+# Run a single experiment
+python3 run_experiment.py --algo PPO --env empty_5x5 --seed 1
 
-| Algorithm | What it is |
-|-----------|------------|
-| **DQN** | Value-based, discrete actions |
-| **A2C** | Basic actor-critic |
-| **PPO** | Improved actor-critic (more stable than A2C) |
-| **SAC** | Off-policy actor-critic |
+# Run all algorithms on an environment (5 seeds each)
+python3 run_experiment.py --env empty_5x5
 
-**Exploration bonus** (from SB3-Contrib):
-- **PPO + ICM** — adds curiosity-driven exploration
+# Custom timesteps
+python3 run_experiment.py --algo PPO --env doorkey_5x5 --timesteps 150000
+```
 
----
+### Key Experiments
 
-## Challenges We Can Address
+```bash
+# Training instability (DQN collapse)
+python3 run_experiment.py --env empty_5x5
 
-From the Arulkumaran 2017 paper (referenced in assignment):
+# Sparse rewards
+python3 run_experiment.py --env doorkey_5x5 --timesteps 150000
+python3 run_experiment.py --algo PPO --env doorkey_8x8 --timesteps 200000
 
-1. **Sample Efficiency** — How quickly does the agent learn?
-2. **Sparse Rewards** — Can the agent learn when rewards are rare?
-3. **Exploration** — Does curiosity help discover solutions faster?
-4. **Generalization** — Can agents trained on small envs work on larger ones?
+# Generalization
+python3 run_experiment.py --generalization
+```
 
----
+### Generate Visualizations
 
-## Environments We Can Use
+```bash
+# Learning curves for an environment
+python3 run_experiment.py --env empty_5x5 --plot
 
-**MiniGrid** — recommended in the assignment, easy to install, many variants.
+# Combined summary across all environments
+python3 run_experiment.py --combined
+python3 run_experiment.py --summary
+```
 
-| Environment | What's hard about it |
-|-------------|---------------------|
-| `MiniGrid-Empty-8x8-v0` | Nothing (sanity check) |
-| `MiniGrid-DoorKey-5x5-v0` | Must find key, unlock door, reach goal |
-| `MiniGrid-DoorKey-16x16-v0` | Same but larger (harder exploration) |
-| `MiniGrid-MultiRoom-N2-S4-v0` | Navigate through 2 connected rooms |
-| `MiniGrid-MultiRoom-N6-v0` | Navigate through 6 rooms (very sparse reward) |
+## Project Structure
 
----
+```
+DRL_v2/
+├── run_experiment.py      # Main experiment runner
+├── results/               # JSON files with experiment data
+│   ├── empty_5x5/
+│   ├── doorkey_5x5/
+│   ├── doorkey_8x8/
+│   └── generalization/
+├── plots/                 # Generated visualizations
+│   ├── empty_5x5/
+│   ├── doorkey_5x5/
+│   ├── doorkey_8x8/
+│   └── combined/
+└── resources/             # Reference materials
+```
 
-## Experiments We Can Run
+## Algorithms
 
-### Experiment 1: Algorithm Comparison
-> Which algorithm learns fastest on DoorKey?
+- **PPO** (Proximal Policy Optimization)
+- **A2C** (Advantage Actor-Critic)
+- **DQN** (Deep Q-Network)
+- **QRDQN** (Quantile Regression DQN)
 
-Compare A2C vs PPO vs DQN on the same environment. Plot learning curves.
+## Environments
 
-### Experiment 2: Exploration Bonus
-> Does curiosity help with sparse rewards?
+| Environment | Description |
+|-------------|-------------|
+| `empty_5x5` | Simple 5×5 navigation |
+| `empty_8x8` | Larger 8×8 navigation |
+| `doorkey_5x5` | Must find key, unlock door, reach goal |
+| `doorkey_8x8` | Larger version with sparser rewards |
+| `distshift1/2` | Generalization test environments |
 
-Compare PPO vs PPO+ICM on MultiRoom environments. Measure success rate.
+## References
 
-### Experiment 3: Generalization
-> Can a small-env agent work on bigger envs?
-
-Train on DoorKey-5x5, test on DoorKey-8x8 and 16x16.
-
----
-
-## Metrics to Record
-
-- Episode reward over training steps
-- Success rate (did agent reach goal?)
-- Time to first success
-- Wall-clock training time
-
-Run each experiment with **5 different random seeds** to get error bars.
-
----
-
-## Resources
-
-- [MiniGrid Docs](https://minigrid.farama.org/)
-- [Stable Baselines 3](https://stable-baselines3.readthedocs.io/)
-- [SB3-Contrib](https://sb3-contrib.readthedocs.io/)
+- Arulkumaran et al. (2017). A Brief Survey of Deep Reinforcement Learning. *IEEE Signal Processing Magazine*.
+- Cobbe et al. (2019). Quantifying Generalization in Reinforcement Learning. *ICML*.
+- Chevalier-Boisvert et al. (2023). Minigrid & Miniworld. *NeurIPS*.
