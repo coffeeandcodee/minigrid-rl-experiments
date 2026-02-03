@@ -2,6 +2,9 @@
 
 Experimental investigation of key challenges in deep reinforcement learning using MiniGrid environments and Stable Baselines 3.
 
+Final report of results can be seen in "final_report.pdf". See section 2: "Beyond the Frozen Lake".
+
+
 ## Challenges Investigated
 
 | Challenge | Environment | Key Finding |
