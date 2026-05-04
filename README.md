@@ -1,6 +1,6 @@
 # Frozen lake tasks & Deep Reinforcement Learning Experiments
 
-Experimental investigation of key challenges in deep reinforcement learning using MiniGrid environments and Stable Baselines 3.
+Experimental investigation of key challenges in deep reinforcement learning using MiniGrid environments and Stable Baselines 3. Check part 2 of the report "Beyond the Frozen Lake" for experimental  details and results. Achieved a **final grade of 82%, the only group to achieve above 80**.
 
 Final report of results can be seen in "final_report.pdf". See section 2: "Beyond the Frozen Lake".
 
